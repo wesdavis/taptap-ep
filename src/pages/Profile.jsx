@@ -66,7 +66,15 @@ export default function Profile() {
         toast.success('Profile updated!');
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        // Check out from any active check-in before logging out
+        const activeCheckIn = myCheckIns.find(c => c.is_active);
+        if (activeCheckIn) {
+            await base44.entities.CheckIn.update(activeCheckIn.id, {
+                is_active: false,
+                checked_out_at: new Date().toISOString()
+            });
+        }
         base44.auth.logout();
     };
 

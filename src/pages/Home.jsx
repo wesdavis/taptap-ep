@@ -94,7 +94,7 @@ export default function Home() {
         queryKey: ['my-pings', user?.email],
         queryFn: () => base44.entities.Ping.filter({ to_user_email: user.email, status: 'pending' }),
         enabled: !!user?.email,
-        refetchInterval: 10000
+        refetchInterval: 3000 // Poll more frequently for real-time feel
     });
 
     const { data: sentPings = [] } = useQuery({
