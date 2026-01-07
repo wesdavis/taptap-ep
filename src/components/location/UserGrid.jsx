@@ -5,7 +5,7 @@ import { Zap, Check, User } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
-export default function UserGrid({ users, currentUser, locationId, locationName, existingPings }) {
+export default function UserGrid({ users, currentUser, locationId, locationName, existingPings, onPingSent }) {
     const [sentPings, setSentPings] = useState(new Set());
     const [sendingPing, setSendingPing] = useState(null);
 
@@ -20,19 +20,46 @@ export default function UserGrid({ users, currentUser, locationId, locationName,
     const handlePing = async (targetUser) => {
         setSendingPing(targetUser.user_email);
         
-        await base44.entities.Ping.create({
+        // Check if target has already pinged current user at this location (mutual match)
+        const existingReversePings = await base44.entities.Ping.filter({
+            from_user_email: targetUser.user_email,
+            to_user_email: currentUser.email,
+            location_id: locationId
+        });
+
+        const reversePing = existingReversePings.find(p => p.status === 'pending');
+        const isMatch = !!reversePing;
+
+        // Create the ping
+        const newPing = await base44.entities.Ping.create({
             from_user_email: currentUser.email,
             from_user_name: currentUser.full_name,
             from_user_photo: currentUser.photo_url,
             to_user_email: targetUser.user_email,
+            to_user_name: targetUser.user_name,
+            to_user_photo: targetUser.user_photo,
             location_id: locationId,
             location_name: locationName,
-            status: 'pending'
+            status: isMatch ? 'matched' : 'pending'
         });
+
+        // If mutual match, update the reverse ping too
+        if (isMatch && reversePing) {
+            await base44.entities.Ping.update(reversePing.id, { 
+                status: 'matched',
+                to_user_name: currentUser.full_name,
+                to_user_photo: currentUser.photo_url
+            });
+            toast.success(`🎉 It's a match with ${targetUser.user_name || 'user'}!`, {
+                duration: 5000
+            });
+        } else {
+            toast.success(`Ping sent to ${targetUser.user_name || 'user'}!`);
+        }
 
         setSentPings(prev => new Set([...prev, targetUser.user_email]));
         setSendingPing(null);
-        toast.success(`Ping sent to ${targetUser.user_name || 'user'}!`);
+        onPingSent?.();
     };
 
     if (users.length === 0) {

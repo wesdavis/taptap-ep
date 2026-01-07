@@ -11,6 +11,7 @@ import LocationCard from '@/components/location/LocationCard';
 import UserGrid from '@/components/location/UserGrid';
 import CheckInStatus from '@/components/location/CheckInStatus';
 import PingNotifications from '@/components/notifications/PingNotifications';
+import MatchNotifications from '@/components/notifications/MatchNotifications';
 
 const CHECKIN_RADIUS_METERS = 50;
 
@@ -97,11 +98,38 @@ export default function Home() {
         refetchInterval: 3000 // Poll more frequently for real-time feel
     });
 
-    const { data: sentPings = [] } = useQuery({
+    const { data: sentPings = [], refetch: refetchSentPings } = useQuery({
         queryKey: ['sent-pings', user?.email],
         queryFn: () => base44.entities.Ping.filter({ from_user_email: user.email }),
         enabled: !!user?.email
     });
+
+    // Fetch blocks (both directions)
+    const { data: myBlocks = [] } = useQuery({
+        queryKey: ['my-blocks', user?.email],
+        queryFn: () => base44.entities.Block.filter({ blocker_email: user.email }),
+        enabled: !!user?.email
+    });
+
+    const { data: blockedByOthers = [] } = useQuery({
+        queryKey: ['blocked-by-others', user?.email],
+        queryFn: () => base44.entities.Block.filter({ blocked_email: user.email }),
+        enabled: !!user?.email
+    });
+
+    // Fetch matched pings for notifications
+    const { data: matchedPings = [], refetch: refetchMatches } = useQuery({
+        queryKey: ['matched-pings', user?.email],
+        queryFn: () => base44.entities.Ping.filter({ from_user_email: user.email, status: 'matched' }),
+        enabled: !!user?.email,
+        refetchInterval: 3000
+    });
+
+    // Build blocked users set (both directions)
+    const blockedUsers = new Set([
+        ...myBlocks.map(b => b.blocked_email),
+        ...blockedByOthers.map(b => b.blocker_email)
+    ]);
 
     const myActiveCheckIn = allCheckIns.find(c => c.user_email === user?.email && c.is_active);
     
@@ -168,6 +196,9 @@ export default function Home() {
             
             // If not applying filters, return all (for count display)
             if (!applyFilters) return true;
+            
+            // Filter out blocked users (both directions)
+            if (blockedUsers.has(c.user_email)) return false;
             
             // Filter out users with private mode ON
             if (c.user_private_mode) return false;
@@ -284,6 +315,13 @@ export default function Home() {
                         <RefreshCw className="w-5 h-5" />
                     </Button>
                 </div>
+
+                {/* Match Notifications */}
+                {matchedPings.length > 0 && !selectedLocation && (
+                    <div className="mb-6">
+                        <MatchNotifications matches={matchedPings} onDismiss={() => refetchMatches()} />
+                    </div>
+                )}
 
                 {/* Ping Notifications */}
                 {myPings.length > 0 && !selectedLocation && (
@@ -474,6 +512,10 @@ export default function Home() {
                                         locationId={selectedLocation.id}
                                         locationName={selectedLocation.name}
                                         existingPings={sentPings}
+                                        onPingSent={() => {
+                                            refetchSentPings();
+                                            refetchMatches();
+                                        }}
                                     />
                                 </div>
                             ) : (
