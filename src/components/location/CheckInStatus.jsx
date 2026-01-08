@@ -18,10 +18,10 @@ export default function CheckInStatus({ checkIn, onCheckOut, loading }) {
                     </div>
                     <div>
                         <p className="text-amber-300 text-sm font-medium">Currently at</p>
-                        <h3 className="text-white font-bold">{checkIn.location_name}</h3>
+                        <h3 className="text-white font-bold">{checkIn?.location_name}</h3>
                         <div className="flex items-center gap-1 text-slate-400 text-xs mt-0.5">
                             <Clock className="w-3 h-3" />
-                            <span>Checked in {moment(checkIn.created_date).fromNow()}</span>
+                            <span>Checked in {moment(checkIn?.created_date).fromNow()}</span>
                         </div>
                     </div>
                 </div>
