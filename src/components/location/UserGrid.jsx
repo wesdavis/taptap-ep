@@ -11,7 +11,7 @@ export default function UserGrid({ users, currentUser, locationId, locationName,
 
     const hasAlreadyPinged = (userEmail) => {
         return existingPings?.some(p => 
-            p.from_user_email === currentUser.email && 
+            p.from_user_email === currentUser?.email && 
             p.to_user_email === userEmail &&
             p.location_id === locationId
         ) || sentPings.has(userEmail);
@@ -25,7 +25,7 @@ export default function UserGrid({ users, currentUser, locationId, locationName,
         // Check if target has already pinged current user at this location (mutual match)
         const existingReversePings = await base44.entities.Ping.filter({
             from_user_email: targetUser.user_email,
-            to_user_email: currentUser.email,
+            to_user_email: currentUser?.email,
             location_id: locationId
         });
 
@@ -34,9 +34,9 @@ export default function UserGrid({ users, currentUser, locationId, locationName,
 
         // Create the ping
         const newPing = await base44.entities.Ping.create({
-            from_user_email: currentUser.email,
-            from_user_name: currentUser.full_name,
-            from_user_photo: currentUser.photo_url,
+            from_user_email: currentUser?.email,
+            from_user_name: currentUser?.full_name,
+            from_user_photo: currentUser?.photo_url,
             to_user_email: targetUser.user_email,
             to_user_name: targetUser.user_name,
             to_user_photo: targetUser.user_photo,
@@ -49,8 +49,8 @@ export default function UserGrid({ users, currentUser, locationId, locationName,
         if (isMatch && reversePing) {
             await base44.entities.Ping.update(reversePing.id, { 
                 status: 'matched',
-                to_user_name: currentUser.full_name,
-                to_user_photo: currentUser.photo_url
+                to_user_name: currentUser?.full_name,
+                to_user_photo: currentUser?.photo_url
             });
             toast.success(`🎉 It's a match with ${targetUser.user_name || 'user'}!`, {
                 duration: 5000

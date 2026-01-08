@@ -67,6 +67,10 @@ export default function Profile() {
     };
 
     const handleLogout = async () => {
+        // Clear local state FIRST to prevent re-renders from accessing null user
+        setUser(null);
+        setLoading(true);
+        
         try {
             // Check out from any active check-in before logging out
             const activeCheckIn = myCheckIns.find(c => c.is_active);
@@ -78,14 +82,14 @@ export default function Profile() {
             }
         } catch (err) {
             console.error('Checkout error:', err);
-        } finally {
-            // Clear state and logout
-            setUser(null);
-            await base44.auth.logout();
         }
+        
+        // Redirect immediately to prevent any component re-renders
+        base44.auth.logout('/');
     };
 
-    if (loading) {
+    // Show loading spinner if user data is still loading or user is null
+    if (loading || !user) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -131,10 +135,10 @@ export default function Profile() {
                             </label>
                         </div>
                         {uploading && <p className="text-amber-400 text-sm">Uploading...</p>}
-                        <h2 className="text-xl font-bold text-white">{user.full_name}</h2>
-                        <p className="text-slate-400 text-sm">{user.email}</p>
+                        <h2 className="text-xl font-bold text-white">{user?.full_name}</h2>
+                        <p className="text-slate-400 text-sm">{user?.email}</p>
                         <div className="mt-2 px-3 py-1 rounded-full bg-white/10 text-slate-300 text-sm capitalize">
-                            {user.gender}
+                            {user?.gender}
                         </div>
                     </div>
 
@@ -175,7 +179,7 @@ export default function Profile() {
                         </div>
                         
                         {/* Seeking Preference */}
-                        {user.gender === 'female' && (
+                        {user?.gender === 'female' && (
                             <div>
                                 <Label className="text-slate-300 mb-2 block">Seeking</Label>
                                 <Select

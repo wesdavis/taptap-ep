@@ -263,7 +263,8 @@ export default function Home() {
 
     const profileComplete = user?.gender && user?.photo_url && user?.seeking;
 
-    if (loading) {
+    // Show loading spinner if user data is still loading or user is null
+    if (loading || !user) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -364,7 +365,7 @@ export default function Home() {
                                     <div>
                                         <p className="text-purple-300 font-medium">Browse & Connect</p>
                                         <p className="text-slate-400 text-sm">
-                                            Seeking: <span className="text-purple-300 capitalize">{user.seeking || 'everyone'}</span>
+                                            Seeking: <span className="text-purple-300 capitalize">{user?.seeking || 'everyone'}</span>
                                         </p>
                                     </div>
                                 </>
@@ -506,9 +507,9 @@ export default function Home() {
                                             {locationCheckIns.length} match{locationCheckIns.length !== 1 ? 'es' : ''}
                                         </span>
                                     </div>
-                                    {user.seeking && user.seeking !== 'everyone' && (
+                                    {user?.seeking && user?.seeking !== 'everyone' && (
                                         <p className="text-slate-500 text-sm">
-                                            Showing {user.seeking} profiles based on your preferences
+                                            Showing {user?.seeking} profiles based on your preferences
                                         </p>
                                     )}
                                     <UserGrid
