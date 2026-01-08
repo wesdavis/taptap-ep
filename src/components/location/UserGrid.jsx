@@ -18,6 +18,8 @@ export default function UserGrid({ users, currentUser, locationId, locationName,
     };
 
     const handlePing = async (targetUser) => {
+        if (!currentUser) return;
+        
         setSendingPing(targetUser.user_email);
         
         // Check if target has already pinged current user at this location (mutual match)

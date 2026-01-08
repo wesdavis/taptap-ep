@@ -211,6 +211,11 @@ export default function Home() {
     };
 
     const handleCheckIn = async (location) => {
+        if (!user) {
+            toast.error('Please log in to check in');
+            return;
+        }
+
         setCheckingIn(true);
         
         if (myActiveCheckIn) {
