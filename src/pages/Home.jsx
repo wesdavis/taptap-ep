@@ -93,34 +93,34 @@ export default function Home() {
 
     const { data: myPings = [], refetch: refetchPings } = useQuery({
         queryKey: ['my-pings', user?.email],
-        queryFn: () => base44.entities.Ping.filter({ to_user_email: user.email, status: 'pending' }),
+        queryFn: () => base44.entities.Ping.filter({ to_user_email: user?.email, status: 'pending' }),
         enabled: !!user?.email,
         refetchInterval: 3000 // Poll more frequently for real-time feel
     });
 
     const { data: sentPings = [], refetch: refetchSentPings } = useQuery({
         queryKey: ['sent-pings', user?.email],
-        queryFn: () => base44.entities.Ping.filter({ from_user_email: user.email }),
+        queryFn: () => base44.entities.Ping.filter({ from_user_email: user?.email }),
         enabled: !!user?.email
     });
 
     // Fetch blocks (both directions)
     const { data: myBlocks = [] } = useQuery({
         queryKey: ['my-blocks', user?.email],
-        queryFn: () => base44.entities.Block.filter({ blocker_email: user.email }),
+        queryFn: () => base44.entities.Block.filter({ blocker_email: user?.email }),
         enabled: !!user?.email
     });
 
     const { data: blockedByOthers = [] } = useQuery({
         queryKey: ['blocked-by-others', user?.email],
-        queryFn: () => base44.entities.Block.filter({ blocked_email: user.email }),
+        queryFn: () => base44.entities.Block.filter({ blocked_email: user?.email }),
         enabled: !!user?.email
     });
 
     // Fetch matched pings for notifications
     const { data: matchedPings = [], refetch: refetchMatches } = useQuery({
         queryKey: ['matched-pings', user?.email],
-        queryFn: () => base44.entities.Ping.filter({ from_user_email: user.email, status: 'matched' }),
+        queryFn: () => base44.entities.Ping.filter({ from_user_email: user?.email, status: 'matched' }),
         enabled: !!user?.email,
         refetchInterval: 3000
     });
@@ -226,12 +226,12 @@ export default function Home() {
         }
 
         await base44.entities.CheckIn.create({
-            user_email: user.email,
-            user_name: user.full_name,
-            user_photo: user.photo_url,
-            user_gender: user.gender,
-            user_bio: user.bio,
-            user_private_mode: user.private_mode || false,
+            user_email: user?.email,
+            user_name: user?.full_name,
+            user_photo: user?.photo_url,
+            user_gender: user?.gender,
+            user_bio: user?.bio,
+            user_private_mode: user?.private_mode || false,
             location_id: location.id,
             location_name: location.name,
             is_active: true
@@ -284,7 +284,7 @@ export default function Home() {
         );
     }
 
-    const isFemale = user.gender === 'female';
+    const isFemale = user?.gender === 'female';
     // For display grid, apply seeking/private filters; for count, show all
     const locationCheckIns = selectedLocation ? getCheckInsForLocation(selectedLocation.id, true) : [];
     const locationCheckInsCount = selectedLocation ? getCheckInsForLocation(selectedLocation.id, false).length : 0;

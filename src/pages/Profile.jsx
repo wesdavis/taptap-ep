@@ -24,11 +24,11 @@ export default function Profile() {
             const userData = await base44.auth.me();
             setUser(userData);
             setFormData({
-                bio: userData.bio || '',
-                photo_url: userData.photo_url || '',
-                age: userData.age || '',
-                seeking: userData.seeking || 'everyone',
-                private_mode: userData.private_mode || false
+                bio: userData?.bio || '',
+                photo_url: userData?.photo_url || '',
+                age: userData?.age || '',
+                seeking: userData?.seeking || 'everyone',
+                private_mode: userData?.private_mode || false
             });
             setLoading(false);
         };
@@ -37,13 +37,13 @@ export default function Profile() {
 
     const { data: myCheckIns = [] } = useQuery({
         queryKey: ['my-checkins', user?.email],
-        queryFn: () => base44.entities.CheckIn.filter({ user_email: user.email }),
+        queryFn: () => base44.entities.CheckIn.filter({ user_email: user?.email }),
         enabled: !!user?.email
     });
 
     const { data: receivedPings = [] } = useQuery({
         queryKey: ['received-pings', user?.email],
-        queryFn: () => base44.entities.Ping.filter({ to_user_email: user.email }),
+        queryFn: () => base44.entities.Ping.filter({ to_user_email: user?.email }),
         enabled: !!user?.email
     });
 
@@ -67,12 +67,8 @@ export default function Profile() {
     };
 
     const handleLogout = async () => {
-        // Clear local state FIRST to prevent re-renders from accessing null user
-        setUser(null);
-        setLoading(true);
-        
         try {
-            // Check out from any active check-in before logging out
+            // Check out from any active check-in BEFORE clearing state
             const activeCheckIn = myCheckIns.find(c => c.is_active);
             if (activeCheckIn) {
                 await base44.entities.CheckIn.update(activeCheckIn.id, {
@@ -84,8 +80,13 @@ export default function Profile() {
             console.error('Checkout error:', err);
         }
         
-        // Redirect immediately to prevent any component re-renders
-        base44.auth.logout('/');
+        // Redirect FIRST, then logout will clear everything
+        window.location.href = '/';
+        
+        // Logout after redirect is initiated (non-blocking)
+        setTimeout(() => {
+            base44.auth.logout();
+        }, 100);
     };
 
     // Show loading spinner if user data is still loading or user is null
