@@ -66,34 +66,39 @@ export default function Profile() {
         toast.success('Profile updated!');
     };
 
-    const handleLogout = () => { // Removed 'async' to prevent awaiting
-    // 1. Fire and forget the checkout (don't 'await' it)
-    try {
-        const activeCheckIn = myCheckIns.find(c => c.is_active);
-        if (activeCheckIn) {
-            base44.entities.CheckIn.update(activeCheckIn.id, {
-                is_active: false,
-                checked_out_at: new Date().toISOString()
-            });
+    const handleLogout = async () => {
+        // Immediately clear state to prevent null access errors
+        setUser(null);
+        setLoading(true);
+
+        // Checkout from active location
+        try {
+            const activeCheckIn = myCheckIns.find(c => c.is_active);
+            if (activeCheckIn) {
+                await base44.entities.CheckIn.update(activeCheckIn.id, {
+                    is_active: false,
+                    checked_out_at: new Date().toISOString()
+                });
+            }
+        } catch (err) {
+            console.error('Checkout error:', err);
         }
-    } catch (err) {
-        console.error('Checkout error:', err);
-    }
 
-    // 2. Clear local storage/session markers if your app uses them
-    // (Optional, but helps "snapping" the UI shut)
-
-    // 3. FORCE the redirect immediately without waiting for the DB
-    window.location.replace('/landing'); 
-
-    // 4. Trigger the logout in the background
-    setTimeout(() => {
-        base44.auth.logout();
-    }, 50);
-};
+        // Logout and redirect
+        await base44.auth.logout('/landing');
+    };
 
     // Show loading spinner if user data is still loading or user is null
     if (loading || !user) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    // Additional safety check to prevent rendering with stale data
+    if (!user?.email) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
