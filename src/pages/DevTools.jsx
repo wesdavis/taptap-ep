@@ -75,17 +75,17 @@ export default function DevTools() {
         );
     }
 
-    if (user.role !== 'admin') {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
-                <div className="text-center">
-                    <Shield className="w-16 h-16 text-red-600 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-white mb-2">Admin Access Required</h2>
-                    <p className="text-slate-400">This page is only accessible to administrators</p>
-                </div>
-            </div>
-        );
-    }
+    // if (user.role !== 'admin') {
+    //     return (
+    //         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
+    //             <div className="text-center">
+    //                 <Shield className="w-16 h-16 text-red-600 mx-auto mb-4" />
+    //                 <h2 className="text-xl font-bold text-white mb-2">Admin Access Required</h2>
+    //                 <p className="text-slate-400">This page is only accessible to administrators</p>
+    //             </div>
+    //         </div>
+    //     );
+    // }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950">
