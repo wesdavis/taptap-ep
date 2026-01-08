@@ -66,28 +66,31 @@ export default function Profile() {
         toast.success('Profile updated!');
     };
 
-    const handleLogout = async () => {
-        try {
-            // Check out from any active check-in BEFORE clearing state
-            const activeCheckIn = myCheckIns.find(c => c.is_active);
-            if (activeCheckIn) {
-                await base44.entities.CheckIn.update(activeCheckIn.id, {
-                    is_active: false,
-                    checked_out_at: new Date().toISOString()
-                });
-            }
-        } catch (err) {
-            console.error('Checkout error:', err);
+    const handleLogout = () => { // Removed 'async' to prevent awaiting
+    // 1. Fire and forget the checkout (don't 'await' it)
+    try {
+        const activeCheckIn = myCheckIns.find(c => c.is_active);
+        if (activeCheckIn) {
+            base44.entities.CheckIn.update(activeCheckIn.id, {
+                is_active: false,
+                checked_out_at: new Date().toISOString()
+            });
         }
-        
-        // Redirect FIRST, then logout will clear everything
-        window.location.href = '/landing';
-        
-        // Logout after redirect is initiated (non-blocking)
-        setTimeout(() => {
-            base44.auth.logout();
-        }, 100);
-    };
+    } catch (err) {
+        console.error('Checkout error:', err);
+    }
+
+    // 2. Clear local storage/session markers if your app uses them
+    // (Optional, but helps "snapping" the UI shut)
+
+    // 3. FORCE the redirect immediately without waiting for the DB
+    window.location.replace('/landing'); 
+
+    // 4. Trigger the logout in the background
+    setTimeout(() => {
+        base44.auth.logout();
+    }, 50);
+};
 
     // Show loading spinner if user data is still loading or user is null
     if (loading || !user) {
