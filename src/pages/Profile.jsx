@@ -13,46 +13,42 @@ import { toast } from 'sonner';
 import moment from 'moment';
 
 export default function Profile() {
+    // 1. ALL HOOKS MUST BE AT THE TOP
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        setLoading(true);
-        const data = await base44.auth.me();
-        setUser(data);
-      } catch (err) {
-        console.error("Failed to load user:", err);
-        // If no user is found, send them to the landing page
-        window.location.href = '/landing';
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUser();
-  }, []);
-    // Guard clause to prevent null access
-    if (!user) return <div className='min-h-screen bg-slate-950' />;
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [formData, setFormData] = useState({});
 
+    // 2. Single Effect to fetch user AND set form data
     useEffect(() => {
-        const loadUser = async () => {
-            const userData = await base44.auth.me();
-            setUser(userData);
-            setFormData({
-                bio: userData?.bio || '',
-                photo_url: userData?.photo_url || '',
-                age: userData?.age || '',
-                seeking: userData?.seeking || 'everyone',
-                private_mode: userData?.private_mode || false
-            });
-            setLoading(false);
+        const fetchUser = async () => {
+            try {
+                setLoading(true);
+                const userData = await base44.auth.me();
+                setUser(userData);
+                
+                // Initialize form data immediately
+                if (userData) {
+                    setFormData({
+                        bio: userData?.bio || '',
+                        photo_url: userData?.photo_url || '',
+                        age: userData?.age || '',
+                        seeking: userData?.seeking || 'everyone',
+                        private_mode: userData?.private_mode || false
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load user:", err);
+                window.location.href = '/landing';
+            } finally {
+                setLoading(false);
+            }
         };
-        loadUser();
+        fetchUser();
     }, []);
 
+    // 3. Queries (Safe to run even if user is null because of enabled: !!user)
     const { data: myCheckIns = [] } = useQuery({
         queryKey: ['my-checkins', user?.email],
         queryFn: () => base44.entities.CheckIn.filter({ user_email: user?.email }),
@@ -65,38 +61,46 @@ useEffect(() => {
         enabled: !!user?.email
     });
 
+    // 4. Action Handlers
     const handlePhotoUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         
         setUploading(true);
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
-        setFormData(prev => ({ ...prev, photo_url: file_url }));
-        setUploading(false);
+        try {
+            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            setFormData(prev => ({ ...prev, photo_url: file_url }));
+        } catch (error) {
+            toast.error("Upload failed");
+        } finally {
+            setUploading(false);
+        }
     };
 
     const handleSave = async () => {
         setSaving(true);
-        await base44.auth.updateMe(formData);
-        const updatedUser = await base44.auth.me();
-        setUser(updatedUser);
-        setSaving(false);
-        toast.success('Profile updated!');
+        try {
+            await base44.auth.updateMe(formData);
+            const updatedUser = await base44.auth.me();
+            setUser(updatedUser);
+            toast.success('Profile updated!');
+        } catch (error) {
+            toast.error("Save failed");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleLogout = () => {
-        // 1. Clear local state immediately to stop UI rendering
-        if (setUser) setUser(null); 
-        
-        // 2. Clear local storage just in case
+        // Clear UI state immediately
+        if (setUser) setUser(null);
         localStorage.clear();
-        
-        // 3. Use the SDK's atomic logout with a hard redirect
+        // Atomic Logout + Redirect
         base44.auth.logout('/landing');
     };
 
-    // Show loading spinner if user data is still loading or user is null
-    if (loading || !user) {
+    // 5. GUARD CLAUSES (Must be AFTER all hooks)
+    if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -104,18 +108,14 @@ useEffect(() => {
         );
     }
 
-    // Additional safety check to prevent rendering with stale data
-    if (!user?.email) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-        );
+    if (!user) {
+        return <div className='min-h-screen bg-slate-950' />;
     }
 
     const totalCheckIns = myCheckIns.length;
     const totalPings = receivedPings.length;
 
+    // 6. MAIN RENDER
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950">
             <div className="max-w-lg mx-auto px-4 py-6 pb-24">
