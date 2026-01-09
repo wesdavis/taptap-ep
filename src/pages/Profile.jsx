@@ -15,7 +15,22 @@ import moment from 'moment';
 export default function Profile() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-
+useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        setLoading(true);
+        const data = await base44.auth.me();
+        setUser(data);
+      } catch (err) {
+        console.error("Failed to load user:", err);
+        // If no user is found, send them to the landing page
+        window.location.href = '/landing';
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUser();
+  }, []);
     // Guard clause to prevent null access
     if (!user) return <div className='min-h-screen bg-slate-950' />;
     const [saving, setSaving] = useState(false);
