@@ -27,7 +27,7 @@ export default function DevTools() {
     }, []);
 
     const handleGenerateSquad = async () => {
-        if (!user) {
+        if (false) {
             toast.error('Please log in first');
             return;
         }
@@ -54,38 +54,6 @@ export default function DevTools() {
             setLoading(false);
         }
     };
-
-    if (authLoading) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-        );
-    }
-
-    if (!user) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
-                <div className="text-center">
-                    <Shield className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-white mb-2">Authentication Required</h2>
-                    <p className="text-slate-400">Please log in to access developer tools</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (user?.role !== 'admin') {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center">
-                <div className="text-center">
-                    <Shield className="w-16 h-16 text-red-600 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-white mb-2">Admin Access Required</h2>
-                    <p className="text-slate-400">This page is only accessible to administrators</p>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950">
