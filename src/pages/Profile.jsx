@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from 'sonner';
 import moment from 'moment';
-import { createPageUrl } from '../utils';
+import { createPageUrl } from '@/utils';
 
 export default function Profile() {
     // 1. ALL HOOKS MUST BE AT THE TOP
