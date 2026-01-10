@@ -95,9 +95,11 @@ export default function Profile() {
     const handleLogout = async () => {
         try {
             setUser(null);
-            await base44.auth.logout('/landing');
+            await base44.auth.logout();
+            window.location.href = '/landing';
         } catch (error) {
             console.error("Logout error", error);
+            window.location.href = '/landing';
         }
     };
 
