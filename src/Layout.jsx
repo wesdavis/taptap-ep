@@ -1,3 +1,8 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from './utils';
+import { Home, User } from 'lucide-react';
+
 export default function Layout({ children, currentPageName }) {
     // 1. Define the pages where the bottom nav should BE HIDDEN
     const isPublicPage = currentPageName === 'Landing';
