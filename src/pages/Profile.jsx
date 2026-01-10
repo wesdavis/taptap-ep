@@ -93,15 +93,9 @@ export default function Profile() {
     };
 
     const handleLogout = async () => {
-        // 1. Clear state immediately
-        setUser(null);
-
-        // 2. Get the landing path
-        const landingPath = createPageUrl('Landing');
-        
         try {
-            // 3. Logout via SDK (handles clearing auth state)
-            await base44.auth.logout(landingPath);
+            // Let SDK handle the logout and redirect naturally
+            await base44.auth.logout();
         } catch (error) {
             console.error("Logout failed:", error);
         }
