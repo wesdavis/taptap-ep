@@ -94,8 +94,7 @@ export default function Profile() {
 
     const handleLogout = async () => {
         try {
-            // Let SDK handle the logout and redirect naturally
-            await base44.auth.logout();
+            await base44.auth.logout('/landing');
         } catch (error) {
             console.error("Logout failed:", error);
         }
