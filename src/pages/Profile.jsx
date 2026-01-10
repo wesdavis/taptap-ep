@@ -106,9 +106,6 @@ export default function Profile() {
         } catch (error) {
             console.error("Logout failed:", error);
         }
-        
-        // 4. Guaranteed hard redirect regardless of SDK behavior
-        window.location.href = landingPath;
     };
 
     // 5. GUARD CLAUSES (Must be AFTER all hooks)
