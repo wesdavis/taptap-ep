@@ -6,7 +6,7 @@ import { base44 } from '@/api/base44Client';
 
 export default function Landing() {
     const handleGetStarted = async () => {
-        await base44.auth.redirectToLogin();
+        await base44.auth.redirectToLogin('/');
     };
 
     return (
