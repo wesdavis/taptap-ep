@@ -6,6 +6,7 @@ import { MapPin, Zap, ArrowLeft, Eye, EyeOff, RefreshCw, Search, Navigation, Loa
 import { Button } from "@/components/ui/button";
 import { toast } from 'sonner';
 
+import Landing from './Landing';
 import ProfileSetup from '@/components/profile/ProfileSetup';
 import LocationCard from '@/components/location/LocationCard';
 import UserGrid from '@/components/location/UserGrid';
@@ -276,10 +277,9 @@ export default function Home() {
         );
     }
 
-    // Only redirect to landing if loading is complete AND no user
+    // Render Landing component directly if no user (no URL redirect)
     if (!loading && !user) {
-        window.location.href = '/landing';
-        return null;
+        return <Landing />;
     }
 
     // Redirect to ProfileSetup if incomplete
