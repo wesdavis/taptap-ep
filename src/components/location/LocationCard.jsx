@@ -12,6 +12,13 @@ const categoryIcons = {
 };
 
 export default function LocationCard({ location, activeCount, onClick, isCheckedIn, isNearby, distance }) {
+    // FIX: Convert meters to miles
+    const formatDistance = (meters) => {
+        if (!meters) return '';
+        const miles = meters * 0.000621371;
+        return `${miles.toFixed(1)} mi`;
+    };
+
     return (
         <motion.div
             whileHover={{ scale: 1.02 }}
@@ -45,8 +52,8 @@ export default function LocationCard({ location, activeCount, onClick, isChecked
 
                 <div className="absolute bottom-0 left-0 right-0 p-4">
                     <div className="flex items-center gap-2 text-amber-400 text-sm mb-1">
-                        <span>{categoryIcons[location.category]}</span>
-                        <span className="capitalize">{location.category?.replace('_', ' ')}</span>
+                        <span>{categoryIcons[location.category] || '📍'}</span>
+                        <span className="capitalize">{location.category?.replace('_', ' ') || 'Venue'}</span>
                     </div>
                     <h3 className="text-white font-bold text-lg mb-1">{location.name}</h3>
                     <div className="flex items-center justify-between">
@@ -55,9 +62,10 @@ export default function LocationCard({ location, activeCount, onClick, isChecked
                             <span className="truncate max-w-[140px]">{location.address}</span>
                         </div>
                         <div className="flex items-center gap-3">
+                            {/* FIX: Display Miles instead of KM */}
                             {distance !== null && distance !== undefined && (
-                                <span className="text-slate-400 text-xs">
-                                    {distance < 1000 ? `${Math.round(distance)}m` : `${(distance / 1000).toFixed(1)}km`}
+                                <span className="text-slate-400 text-xs font-bold">
+                                    {formatDistance(distance)}
                                 </span>
                             )}
                             <div className="flex items-center gap-1 text-amber-400 text-sm font-medium">

@@ -12,22 +12,26 @@ export default function ProfileSetup() {
   // Form State
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
+  const [gender, setGender] = useState('');      // <--- Restored
+  const [lookingFor, setLookingFor] = useState(''); // <--- Restored
   const [avatarUrl, setAvatarUrl] = useState('');
 
-  // Load existing data if it exists
+  // Load existing data
   useEffect(() => {
     const loadProfile = async () => {
       if (!user) return;
       
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, bio, avatar_url')
+        .select('username, bio, gender, looking_for, avatar_url')
         .eq('id', user.id)
         .single();
 
       if (data && !error) {
         setUsername(data.username || '');
         setBio(data.bio || '');
+        setGender(data.gender || '');          // <--- Restored
+        setLookingFor(data.looking_for || ''); // <--- Restored
         setAvatarUrl(data.avatar_url || '');
       }
     };
@@ -41,20 +45,19 @@ export default function ProfileSetup() {
     try {
       setLoading(true);
 
-      // 1. Update Supabase
       const { error } = await supabase
         .from('profiles')
         .upsert({
           id: user.id,
           username: username,
           bio: bio,
+          gender: gender,             // <--- Saving to DB
+          looking_for: lookingFor,    // <--- Saving to DB
           avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
-
-      // 2. Redirect to Home (This fixes the 404!)
       navigate('/'); 
 
     } catch (error) {
@@ -74,7 +77,7 @@ export default function ProfileSetup() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Avatar Placeholder (We can add real upload later) */}
+          {/* Avatar */}
           <div className="flex justify-center">
             <div className="relative group cursor-pointer">
               <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-amber-500 flex items-center justify-center overflow-hidden">
@@ -90,18 +93,50 @@ export default function ProfileSetup() {
             </div>
           </div>
 
+          {/* Username (Display Name) */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">Username</label>
+            <label className="text-sm font-medium text-slate-300">Display Name</label>
             <input
               type="text"
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
-              placeholder="@username"
+              placeholder="e.g. Wes Davis" 
             />
           </div>
 
+          {/* Gender & Seeking - RESTORED */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">I am a...</label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none appearance-none"
+              >
+                <option value="">Select</option>
+                <option value="Male">Man</option>
+                <option value="Female">Woman</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Looking for...</label>
+              <select
+                value={lookingFor}
+                onChange={(e) => setLookingFor(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none appearance-none"
+              >
+                <option value="">Select</option>
+                <option value="Men">Men</option>
+                <option value="Women">Women</option>
+                <option value="Everyone">Everyone</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Bio */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-300">Bio</label>
             <textarea
@@ -118,7 +153,7 @@ export default function ProfileSetup() {
             disabled={loading}
             className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
           >
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Save Changes'}
+            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Save Profile'}
           </button>
         </form>
       </div>
