@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import LocationCard from '../components/location/LocationCard';
-import { User, Settings, Users, MapPin } from 'lucide-react';
+import { User, Settings, Users, MapPin, Star, Filter } from 'lucide-react';
 
-// Helper to calculate real distance (Haversine formula)
+// Distance Calculator (Haversine Formula)
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; // Put far away if unknown
   const R = 6371e3; // Earth radius in meters
   const φ1 = lat1 * Math.PI / 180;
   const φ2 = lat2 * Math.PI / 180;
@@ -17,12 +17,12 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
             Math.cos(φ1) * Math.cos(φ1) *
             Math.sin(Δλ/2) * Math.sin(Δλ/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c; // Distance in meters
+  return R * c; 
 };
 
 const Home = () => {
   const navigate = useNavigate();
-  const { user } = useAuth(); // Get the logged-in user ID
+  const { user } = useAuth();
   
   // State
   const [profile, setProfile] = useState(null);
@@ -30,8 +30,11 @@ const Home = () => {
   const [recentPings, setRecentPings] = useState([]);
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // Sorting State
+  const [sortBy, setSortBy] = useState('distance'); // Options: 'distance', 'rating', 'crowd'
 
-  // 1. Get Real GPS Position
+  // 1. Get Real GPS
   useEffect(() => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition((position) => {
@@ -43,174 +46,137 @@ const Home = () => {
     }
   }, []);
 
-  // 2. Fetch All Data (Profile, Pings, Locations)
+  // 2. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
 
-        // A. Fetch User Profile
+        // Fetch User
         if (user) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
+          const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // B. Fetch Recent Connections (Pings)
-          // (Find pings where I am sender OR receiver)
           const { data: pingsData } = await supabase
             .from('pings')
-            .select(`
-              *,
-              sender:profiles!sender_id(username, avatar_url),
-              receiver:profiles!receiver_id(username, avatar_url)
-            `)
+            .select(`*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)`)
             .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
             .order('created_at', { ascending: false })
             .limit(5);
           setRecentPings(pingsData || []);
         }
 
-        // C. Fetch Locations
-        const { data: locData, error } = await supabase
-          .from('locations')
-          .select('*')
-          .order('name', { ascending: true });
-
-        if (error) throw error;
+        // Fetch Locations
+        const { data: locData } = await supabase.from('locations').select('*');
         setLocations(locData || []);
 
       } catch (err) {
-        console.error('Error loading dashboard:', err.message);
+        console.error('Error:', err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [user]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
-        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  // 3. THE SORTING LOGIC
+  const sortedLocations = useMemo(() => {
+    // First, map locations to add a temporary "distance" property to them
+    const mapped = locations.map(loc => {
+      // Mock active count (In real app, we'd query the 'pings' count per location here)
+      const mockActiveCount = Math.floor(Math.random() * 20); 
+      
+      const dist = userCoords 
+        ? calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude)
+        : Infinity;
+        
+      return { ...loc, _distance: dist, _activeCount: mockActiveCount };
+    });
+
+    // Then sort based on the selected mode
+    return mapped.sort((a, b) => {
+      if (sortBy === 'distance') return a._distance - b._distance;
+      if (sortBy === 'rating') return b.rating - a.rating; // Highest rating first
+      if (sortBy === 'crowd') return b._activeCount - a._activeCount; // Most people first
+      return 0;
+    });
+  }, [locations, userCoords, sortBy]);
+
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500">Loading...</div>;
 
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
       
-      {/* --- SECTION 1: USER DASHBOARD --- */}
-      <div className="bg-slate-900 border-b border-slate-800 p-6 rounded-b-3xl shadow-2xl">
-        
-        {/* Header: Name & Edit Button */}
+      {/* User Dashboard */}
+      <div className="bg-slate-900 border-b border-slate-800 p-6 rounded-b-3xl shadow-2xl mb-6">
         <div className="flex justify-between items-start mb-6">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-amber-500 overflow-hidden relative">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-8 h-8 text-slate-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              )}
+            <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-amber-500 overflow-hidden">
+              {profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" /> : <User className="w-8 h-8 m-auto mt-4 text-slate-400" />}
             </div>
             <div>
               <h1 className="text-2xl font-bold">{profile?.username || "Explorer"}</h1>
-              <p className="text-slate-400 text-sm">{profile?.bio || "Ready to connect"}</p>
+              <p className="text-slate-400 text-sm">Ready to connect</p>
             </div>
           </div>
-          <button 
-            onClick={() => navigate('/profile-setup')}
-            className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+          <button onClick={() => navigate('/profile-setup')}><Settings className="w-6 h-6 text-slate-400" /></button>
         </div>
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
-            <div className="flex items-center gap-2 text-amber-500 mb-1">
-              <Users className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-wider">Met</span>
-            </div>
-            <p className="text-2xl font-bold text-white">{recentPings.length}</p>
-            <p className="text-xs text-slate-500">Connections made</p>
-          </div>
-           <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
-            <div className="flex items-center gap-2 text-green-500 mb-1">
-              <MapPin className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-wider">Spots</span>
-            </div>
-            <p className="text-2xl font-bold text-white">{locations.length}</p>
-            <p className="text-xs text-slate-500">Venues near you</p>
-          </div>
-        </div>
-
-        {/* Recent People (Horizontal Scroll) */}
+        
+        {/* Connection Scroller */}
         <div>
-          <h3 className="text-sm font-medium text-slate-400 mb-3">Recent Connections</h3>
-          {recentPings.length === 0 ? (
-            <div className="p-4 bg-slate-800/50 rounded-xl text-center text-xs text-slate-500">
-              No connections yet. Tap a location to start!
-            </div>
-          ) : (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-              {recentPings.map((ping) => {
-                // Determine which profile is "the other person"
-                const otherPerson = ping.sender_id === user.id ? ping.receiver : ping.sender;
-                return (
-                  <div key={ping.id} className="flex flex-col items-center gap-1 min-w-[60px]">
-                    <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 overflow-hidden">
-                      {otherPerson?.avatar_url && <img src={otherPerson.avatar_url} className="w-full h-full object-cover" />}
-                    </div>
-                    <span className="text-[10px] text-slate-400 truncate w-full text-center">
-                      {otherPerson?.username || "User"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <h3 className="text-xs font-bold uppercase text-slate-500 mb-3 tracking-wider">Recent Connections</h3>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+             {recentPings.length === 0 && <span className="text-sm text-slate-600 italic">No meets yet. Go out there!</span>}
+             {recentPings.map(ping => (
+               <div key={ping.id} className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 overflow-hidden shrink-0">
+                  <img src={ping.sender_id === user.id ? ping.receiver.avatar_url : ping.sender.avatar_url} className="w-full h-full object-cover" />
+               </div>
+             ))}
+          </div>
         </div>
       </div>
 
-      {/* --- SECTION 2: LOCATIONS GRID --- */}
-      <div className="p-6">
-        <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-amber-500" />
-          Nearby Locations
+      {/* Locations Header & Sorter */}
+      <div className="px-6 mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold flex items-center gap-2">
+          <MapPin className="w-5 h-5 text-amber-500" /> Nearby
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {locations.map((loc) => {
-            // CALCULATE REAL DISTANCE
-            const distMeters = userCoords 
-              ? calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude)
-              : null;
-
-            return (
-              <LocationCard 
-                key={loc.id} 
-                location={{
-                  ...loc,
-                  category: loc.type ? loc.type.toLowerCase() : 'bar'
-                }}
-                // This will count how many active pings are happening (Placeholder for now until we add 'checkins' table)
-                activeCount={Math.floor(Math.random() * 20) + 5} 
-                
-                // Pass the real calculated distance
-                distance={distMeters} 
-                
-                isCheckedIn={false}
-                isNearby={distMeters && distMeters < 500} // Green ring if under 500m
-                onClick={() => navigate(`/location/${loc.id}`)} 
-              />
-            );
-          })}
+        {/* SORTING BUTTONS */}
+        <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+           <button 
+             onClick={() => setSortBy('distance')}
+             className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'distance' ? 'bg-amber-500 text-black' : 'text-slate-400'}`}
+           >
+             Near
+           </button>
+           <button 
+             onClick={() => setSortBy('crowd')}
+             className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'crowd' ? 'bg-amber-500 text-black' : 'text-slate-400'}`}
+           >
+             Hot
+           </button>
+           <button 
+             onClick={() => setSortBy('rating')}
+             className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'rating' ? 'bg-amber-500 text-black' : 'text-slate-400'}`}
+           >
+             Top
+           </button>
         </div>
+      </div>
+        
+      {/* The List */}
+      <div className="px-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+        {sortedLocations.map((loc) => (
+          <LocationCard 
+            key={loc.id} 
+            location={{ ...loc, category: loc.type ? loc.type.toLowerCase() : 'bar' }}
+            activeCount={loc._activeCount} 
+            distance={loc._distance} 
+            isNearby={loc._distance < 500}
+            onClick={() => navigate(`/location/${loc.id}`)} 
+          />
+        ))}
       </div>
     </div>
   );
