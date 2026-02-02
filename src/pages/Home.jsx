@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // 1. Added Navigation
 import { supabase } from '../lib/supabase';
 import LocationCard from '../components/location/LocationCard'; 
 
@@ -6,6 +7,9 @@ const Home = () => {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // 2. Initialize the navigation hook
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -32,7 +36,10 @@ const Home = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
-        <p className="text-gray-500">Finding spots near you...</p>
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500 text-sm">Finding spots...</p>
+        </div>
       </div>
     );
   }
@@ -47,33 +54,35 @@ const Home = () => {
   }
 
   return (
-    <div className="pb-20 bg-gray-50 min-h-screen"> 
-      <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 shadow-sm">
-        <h1 className="text-xl font-bold text-gray-900">Discover</h1>
-        <p className="text-xs text-gray-500">Tap a location to check in</p>
+    <div className="pb-24 bg-gray-900 min-h-screen"> 
+      {/* Dark Header to match the card style */}
+      <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 px-4 py-4 shadow-sm">
+        <h1 className="text-xl font-bold text-white">TapTap El Paso</h1>
+        <p className="text-xs text-gray-400">Discover what's happening now</p>
       </div>
 
-      <div className="p-4 space-y-4">
-        {locations.length === 0 ? (
-          <p className="text-center text-gray-400 mt-10">No locations found.</p>
-        ) : (
-          locations.map((location) => (
-            <LocationCard 
-              key={location.id} 
-              
-              /* 👇 THIS IS THE CRITICAL FIX 👇 */
-              location={location} 
-              /* 👆 WITHOUT THIS LINE, THE APP CRASHES 👆 */
+      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+        {locations.map((loc) => (
+          <LocationCard 
+            key={loc.id} 
+            
+            // 3. FIX: Pass the location object, but ensure 'category' exists
+            // (Our DB uses 'type', but the Card wants 'category')
+            location={{
+              ...loc,
+              category: loc.type ? loc.type.toLowerCase() : 'bar'
+            }}
 
-              id={location.id}
-              name={location.name}
-              type={location.type}
-              description={location.description}
-              image={location.image_url} 
-              distance="0.5 mi" 
-            />
-          ))
-        )}
+            // 4. FIX: Add dummy data for visual flair (we can connect real data later)
+            activeCount={Math.floor(Math.random() * 50) + 10} 
+            distance={null} // GPS comes later
+            isCheckedIn={false}
+            isNearby={true}
+
+            // 5. FIX: The Click Handler! This makes it interactive.
+            onClick={() => navigate(`/location/${loc.id}`)} 
+          />
+        ))}
       </div>
     </div>
   );
