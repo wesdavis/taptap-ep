@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 
 // Components
-import PingListener from '@/components/PingListener'; // <--- This works now!
+import PingListener from '@/components/PingListener';
 
 // Pages
 import Home from './pages/Home';
@@ -12,6 +12,7 @@ import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import ProfileSetup from './pages/ProfileSetup';
 import PublicProfile from './pages/PublicProfile';
+import LocationDetails from './pages/LocationDetails'; // <--- 1. NEW IMPORT
 
 // Create a client
 const queryClient = new QueryClient();
@@ -44,6 +45,11 @@ const AuthenticatedApp = () => {
         (profileMissing ? <Navigate to="/profile-setup" replace /> : <Home />)
       } />
 
+      {/* 👇 2. NEW ROUTE FOR LOCATIONS 👇 */}
+      <Route path="/location/:id" element={
+        !user ? <Navigate to="/landing" replace /> : <LocationDetails />
+      } />
+
       <Route path="/user/:userId" element={
         !user ? <Navigate to="/landing" replace /> : <PublicProfile />
       } />
@@ -62,9 +68,7 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <Router>
-          {/* This sits in the background and watches for pings */}
           <PingListener />
-          
           <div className="min-h-screen bg-slate-950"> 
              <AuthenticatedApp />
           </div>
