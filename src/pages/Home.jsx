@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import LocationCard from '../components/location/LocationCard'; // Assuming you have this component
+import LocationCard from '../components/location/LocationCard'; 
 
 const Home = () => {
   const [locations, setLocations] = useState([]);
@@ -11,7 +11,6 @@ const Home = () => {
     const fetchLocations = async () => {
       try {
         setLoading(true);
-        // Fetch data from Supabase
         const { data, error } = await supabase
           .from('locations')
           .select('*')
@@ -49,7 +48,6 @@ const Home = () => {
 
   return (
     <div className="pb-20 bg-gray-50 min-h-screen"> 
-      {/* Header Section */}
       <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 shadow-sm">
         <h1 className="text-xl font-bold text-gray-900">Discover</h1>
         <p className="text-xs text-gray-500">Tap a location to check in</p>
@@ -60,15 +58,19 @@ const Home = () => {
           <p className="text-center text-gray-400 mt-10">No locations found.</p>
         ) : (
           locations.map((location) => (
-            // We pass the database data into your LocationCard component
             <LocationCard 
               key={location.id} 
+              
+              /* 👇 THIS IS THE CRITICAL FIX 👇 */
+              location={location} 
+              /* 👆 WITHOUT THIS LINE, THE APP CRASHES 👆 */
+
               id={location.id}
               name={location.name}
               type={location.type}
               description={location.description}
-              image={location.image_url} // Note: Supabase column is image_url
-              distance="0.5 mi" // Placeholder - real GPS math comes later
+              image={location.image_url} 
+              distance="0.5 mi" 
             />
           ))
         )}
