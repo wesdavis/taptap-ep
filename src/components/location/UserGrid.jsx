@@ -59,7 +59,7 @@ export default function UserGrid({ locationId }) {
             
             if (error) throw error;
             if (data) {
-                // FIX: Removed the filter that hid your own face
+                // FIX: Removed the filter so you can SEE YOURSELF in the grid
                 setUsers(data.filter(u => u.profiles));
             }
         } catch (e) { console.log("Grid fetch error:", e); }
@@ -132,7 +132,7 @@ export default function UserGrid({ locationId }) {
             </h3>
             <div className="grid grid-cols-4 gap-4">
                 {users.map((item) => {
-                    const isMe = item.user_id === user.id; // Check if this is me
+                    const isMe = item.user_id === user.id; 
                     const isPinged = sentPings.has(item.user_id);
                     const isTappingThisUser = tappingUserId === item.user_id;
                     const profile = item.profiles; 
@@ -152,7 +152,7 @@ export default function UserGrid({ locationId }) {
                                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full"></div>
                                 </div>
                                 
-                                {/* TAP BUTTON (Only show for others, not myself) */}
+                                {/* TAP BUTTON (Only show for others) */}
                                 {canPing && !isMe && (
                                     <Button
                                         size="sm"
