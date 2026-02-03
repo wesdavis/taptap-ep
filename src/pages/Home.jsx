@@ -2,16 +2,23 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import LocationCard from '../components/location/LocationCard';
-import MissionCard from '../components/gamification/MissionCard'; // Import
-import MysteryCard from '../components/gamification/MysteryCard'; // Import
+import MissionCard from '../components/gamification/MissionCard'; // Make sure this file exists
+import MysteryCard from '../components/gamification/MysteryCard'; // Make sure this file exists
 import { User, Settings, MapPin, Star, ChevronRight, Trophy } from 'lucide-react';
 
+// Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; 
   const R = 6371e3; 
-  const c = 2 * Math.atan2(Math.sqrt(Math.sin((lat2-lat1)*Math.PI/360)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin((lon2-lon1)*Math.PI/360)**2), Math.sqrt(1 - (Math.sin((lat2-lat1)*Math.PI/360)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin((lon2-lon1)*Math.PI/360)**2)));
-  return R * c * 0.000621371; 
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ1) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c * 0.000621371; // Miles
 };
 
 const Home = () => {
@@ -20,8 +27,8 @@ const Home = () => {
   
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
-  const [activeMissions, setActiveMissions] = useState([]); // Sent Pings
-  const [mysteryPings, setMysteryPings] = useState([]);     // Received Pings
+  const [activeMissions, setActiveMissions] = useState([]); // For Women (Sent Pings)
+  const [mysteryPings, setMysteryPings] = useState([]);     // For Men (Received Pings)
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
@@ -39,10 +46,11 @@ const Home = () => {
       try {
         setLoading(true);
         if (user) {
+          // 1. Fetch Profile
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // 1. Fetch Sent Pings (Missions) - Pending only
+          // 2. Fetch Sent Pings (Missions) - Pending only
           const { data: sentData } = await supabase
             .from('pings')
             .select(`*, receiver:profiles!receiver_id(*)`)
@@ -51,7 +59,7 @@ const Home = () => {
             .order('created_at', { ascending: false });
           setActiveMissions(sentData || []);
 
-          // 2. Fetch Received Pings (Mysteries) - Pending only
+          // 3. Fetch Received Pings (Mysteries) - Pending only
           const { data: receivedData } = await supabase
             .from('pings')
             .select(`*, sender:profiles!sender_id(*)`)
@@ -61,6 +69,7 @@ const Home = () => {
           setMysteryPings(receivedData || []);
         }
 
+        // 4. Fetch Locations
         const { data: locData } = await supabase.from('locations').select('*');
         setLocations(locData || []);
       } catch (err) { console.error('Error:', err); } finally { setLoading(false); }
@@ -94,13 +103,20 @@ const Home = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold">{profile?.display_name || "Explorer"}</h1>
-              <div className="flex items-center gap-2">
+              
+              <div className="flex items-center gap-2 mt-1">
                  <p className="text-amber-500 text-xs font-medium">@{profile?.handle || "user"}</p>
-                 {/* XP Badge */}
-                 <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 flex items-center gap-1">
+                 
+                 {/* 👇 THIS IS THE CLICKABLE BADGE YOU ASKED FOR 👇 */}
+                 <span 
+                   onClick={() => navigate('/achievements')} 
+                   className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 flex items-center gap-1 cursor-pointer hover:bg-slate-700 transition"
+                 >
                    <Trophy className="w-3 h-3 text-yellow-500" />
                    {profile?.xp || 0} XP
                  </span>
+                 {/* 👆 IT ACTS AS A BUTTON NOW 👆 */}
+
               </div>
             </div>
           </div>
@@ -132,7 +148,7 @@ const Home = () => {
         </div>
       </div>
         
-      {/* Locations List */}
+      {/* Locations List (Clean View) */}
       <div className="px-4 space-y-3">
         {sortedLocations.map((loc) => (
           <div 

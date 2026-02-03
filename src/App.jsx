@@ -12,7 +12,8 @@ import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import ProfileSetup from './pages/ProfileSetup';
 import PublicProfile from './pages/PublicProfile';
-import LocationDetails from './pages/LocationDetails'; // <--- 1. NEW IMPORT
+import LocationDetails from './pages/LocationDetails'; 
+import Achievements from './pages/Achievements'; // <--- 1. NEW IMPORT
 
 // Create a client
 const queryClient = new QueryClient();
@@ -59,6 +60,9 @@ const AuthenticatedApp = () => {
       } />
 
       <Route path="*" element={<PageNotFound />} />
+
+      <Route path="/achievements" element={<Achievements />} />
+    
     </Routes>
   );
 };
