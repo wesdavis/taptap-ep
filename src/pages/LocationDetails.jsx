@@ -1,170 +1,195 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Clock, Loader2, Star } from 'lucide-react';
-import UserGrid from '../components/location/UserGrid'; // Import the grid
+import React, { useEffect, useState, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Zap, Check, Loader2, User } from 'lucide-react'; 
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
-const LocationDetails = () => {
-  const { id } = useParams(); 
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  
-  const [location, setLocation] = useState(null);
-  const [activeUsers, setActiveUsers] = useState([]); // List of actual people
-  const [checkedIn, setCheckedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
+export default function UserGrid({ locationId }) {
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    const [users, setUsers] = useState([]);
+    const [sentPings, setSentPings] = useState(new Set()); 
+    const [myGender, setMyGender] = useState(null);
+    const [tappingUserId, setTappingUserId] = useState(null);
+    const debounceTimer = useRef(null);
 
-  useEffect(() => {
-    const fetchLocationData = async () => {
-      try {
-        setLoading(true);
-        // 1. Fetch Location Info
-        const { data: locData, error } = await supabase.from('locations').select('*').eq('id', id).single();
-        if (error) throw error;
-        setLocation(locData);
+    useEffect(() => {
+        if (locationId && user) {
+            fetchMyGender();
+            fetchUsers();
+            fetchMySentPings();
+        }
 
-        // 2. Fetch People (Check-ins + Profile Data)
-        // We join the 'profiles' table to get names and photos
-        const { data: peopleData, error: peopleError } = await supabase
-          .from('checkins')
-          .select(`
-            id,
-            user_id,
-            profiles (
-              id,
-              display_name,
-              full_name,
-              avatar_url,
-              handle
+        const channel = supabase
+            .channel(`grid-updates-optimized`)
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'checkins' },
+                () => {
+                    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+                    debounceTimer.current = setTimeout(() => fetchUsers(), 500);
+                }
             )
-          `)
-          .eq('location_id', id)
-          .eq('is_active', true); // Only show people currently here
+            .subscribe();
 
-        if (!peopleError) {
-          setActiveUsers(peopleData || []);
-        }
+        return () => {
+            if (debounceTimer.current) clearTimeout(debounceTimer.current);
+            supabase.removeChannel(channel);
+        };
+    }, [locationId, user]);
 
-        // 3. Am I checked in?
-        if (user) {
-           const amIHere = peopleData?.some(p => p.user_id === user.id);
-           if (amIHere) setCheckedIn(true);
-        }
-
-      } catch (err) { console.error(err); } 
-      finally { setLoading(false); }
-    };
-    fetchLocationData();
-  }, [id, user]);
-
-  const handleCheckIn = async () => {
-    if (!user) return navigate('/auth');
-    if (checkedIn) return;
-
-    try {
-      // Create check-in
-      const { error } = await supabase.from('checkins').insert({
-        user_id: user.id,
-        location_id: id,
-        is_active: true
-      });
-
-      if (error) throw error;
-      
-      // Update local state immediately so you appear in the grid
-      setCheckedIn(true);
-      
-      // Fetch your own profile to add to the list locally (avoids a reload)
-      const { data: myProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      
-      setActiveUsers(prev => [
-        ...prev, 
-        { id: 'temp-id', user_id: user.id, profiles: myProfile }
-      ]);
-
-    } catch (error) {
-      console.error("Check-in failed:", error);
-      alert("Could not check in.");
+    async function fetchMyGender() {
+        const { data } = await supabase.from('profiles').select('gender').eq('id', user.id).single();
+        if (data) setMyGender(data.gender);
     }
-  };
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
-  if (!location) return <div className="min-h-screen bg-slate-950 p-10 text-white">Location not found. <button onClick={() => navigate('/')}>Back</button></div>;
+    async function fetchUsers() {
+        try {
+            // FIX: Ensure we select the right fields from joined profiles
+            const { data, error } = await supabase
+                .from('checkins')
+                .select(`
+                    user_id,
+                    profiles:user_id ( id, display_name, full_name, avatar_url, gender )
+                `)
+                .eq('location_id', locationId)
+                .eq('is_active', true);
+            
+            if (error) throw error;
+            if (data) {
+                // Filter out myself so I don't see my own button
+                setUsers(data
+                    .filter(u => u.user_id !== user.id) 
+                    .filter(u => u.profiles) // Ensure profile data exists
+                );
+            }
+        } catch (e) { console.log("Grid fetch error:", e); }
+    }
 
-  return (
-    <div className="min-h-screen bg-slate-950 pb-20">
-      
-      {/* Hero Image */}
-      <div className="relative h-72">
-        <img src={location.image_url} alt={location.name} className="w-full h-full object-cover" />
+    async function fetchMySentPings() {
+        if (!user) return;
+        const { data } = await supabase
+            .from('pings')
+            .select('to_user_id')
+            .eq('from_user_id', user.id)
+            .eq('location_id', locationId);
+            
+        if (data) {
+            const pingedIds = new Set(data.map(p => p.to_user_id));
+            setSentPings(pingedIds);
+        }
+    }
+
+    const handleTap = async (e, targetUserId, targetName) => {
+        e.stopPropagation(); 
         
-        {/* FIX: Added z-10 so the gradient doesn't block clicks */}
-        <button 
-          onClick={() => navigate('/')}
-          className="absolute top-4 left-4 p-2 bg-black/50 backdrop-blur-md rounded-full text-white z-10 hover:bg-black/70 transition"
-        >
-          <ArrowLeft size={24} />
-        </button>
+        // Safety check: Am I actually checked in?
+        const { data: myCheckin } = await supabase
+            .from('checkins')
+            .select('location_id')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle();
 
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent" />
-        
-        <div className="absolute bottom-0 left-0 p-6 w-full">
-          <h1 className="text-3xl font-bold text-white mb-1">{location.name}</h1>
-          <div className="flex items-center gap-2 mb-2">
-             <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-             <span className="text-white font-bold">{location.rating || 4.5}</span>
-             <span className="text-slate-400 text-sm">({location.review_count || 100} reviews)</span>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-amber-500 text-black text-xs font-bold rounded-full uppercase">{location.type}</span>
-            <div className="flex items-center gap-1.5 text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
-              <span className={`w-2 h-2 rounded-full bg-green-500 ${activeUsers.length > 0 ? 'animate-pulse' : ''}`}></span>
-              <span className="text-xs font-medium">
-                {activeUsers.length === 0 ? "Be the first here" : `${activeUsers.length} checked in`}
-              </span>
+        // Note: String conversion ensures matching types (text vs bigint) doesn't break logic
+        if (!myCheckin || String(myCheckin.location_id) !== String(locationId)) {
+            toast.error("You must be checked in here to tap!");
+            return;
+        }
+
+        setTappingUserId(targetUserId);
+
+        try {
+            const { error } = await supabase.from('pings').insert({
+                from_user_id: user.id,
+                to_user_id: targetUserId,
+                location_id: locationId,
+                status: 'pending'
+            });
+
+            if (error) throw error;
+            
+            toast.success(`You tapped ${targetName}!`);
+            setSentPings(prev => new Set(prev).add(targetUserId));
+        } catch (error) {
+            console.error(error);
+            toast.error("Tap failed. Try again.");
+        } finally {
+            setTappingUserId(null);
+        }
+    };
+
+    if (users.length === 0) return (
+        <div className="p-8 text-center border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/30">
+            <p className="text-slate-500 text-sm">No one else is here yet.</p>
+            <p className="text-amber-500 text-xs font-bold mt-1">Be the first!</p>
+        </div>
+    );
+
+    // CHANGE THIS if you want men to be able to ping too. 
+    // Currently set to only allow females (or if gender is missing/null for testing)
+    const canPing = (myGender || '').toLowerCase() === 'female' || !myGender;
+
+    return (
+        <div className="space-y-3">
+             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Who's Here ({users.length})
+            </h3>
+            <div className="grid grid-cols-4 gap-4">
+                {users.map((item) => {
+                    const isPinged = sentPings.has(item.user_id);
+                    const isTappingThisUser = tappingUserId === item.user_id;
+                    const profile = item.profiles; 
+                    const displayName = profile?.display_name || profile?.full_name || "Guest";
+
+                    return (
+                        <div key={item.user_id} className="flex flex-col items-center group relative">
+                            <div 
+                                className="relative mb-2 cursor-pointer transition-transform active:scale-95"
+                                onClick={() => navigate(`/user/${item.user_id}`)}
+                            >
+                                <div className="relative w-14 h-14 rounded-full bg-slate-800 border-2 border-amber-500/50 p-0.5 overflow-hidden">
+                                    <Avatar className="w-full h-full">
+                                        <AvatarImage src={profile?.avatar_url} className="object-cover" />
+                                        <AvatarFallback><User className="w-6 h-6 text-slate-400" /></AvatarFallback>
+                                    </Avatar>
+                                    {/* Online Dot */}
+                                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full"></div>
+                                </div>
+                                
+                                {/* TAP BUTTON */}
+                                {canPing && (
+                                    <Button
+                                        size="sm"
+                                        disabled={isPinged || isTappingThisUser}
+                                        className={`absolute -bottom-3 left-1/2 -translate-x-1/2 h-6 px-2 rounded-full text-[10px] font-bold shadow-lg z-10 flex items-center gap-1 ${
+                                            isPinged 
+                                            ? "bg-slate-700 text-slate-400" 
+                                            : "bg-green-500 hover:bg-green-600 text-black"
+                                        }`}
+                                        onClick={(e) => handleTap(e, item.user_id, displayName)}
+                                    >
+                                        {isTappingThisUser ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : isPinged ? (
+                                            <> <Check className="w-3 h-3" /> SENT </>
+                                        ) : (
+                                            <> <Zap className="w-3 h-3 fill-black" /> TAP </>
+                                        )}
+                                    </Button>
+                                )}
+                            </div>
+
+                            <span className="text-xs text-slate-300 truncate w-16 text-center">
+                                {displayName.split(' ')[0]}
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
-          </div>
         </div>
-      </div>
-
-      {/* Content */}
-      <div className="p-6 space-y-8">
-        {/* Info Box */}
-        <div className="bg-slate-900/50 p-5 rounded-xl border border-slate-800 space-y-4">
-          <div className="flex items-center gap-4 text-slate-300">
-            <Clock className="text-amber-500 w-5 h-5 shrink-0" />
-            <span>{location.hours || "Open Daily"}</span>
-          </div>
-          <div className="flex items-center gap-4 text-slate-300">
-            <MapPin className="text-amber-500 w-5 h-5 shrink-0" />
-            <span>{location.address || "El Paso, TX"}</span>
-          </div>
-        </div>
-
-        {/* Check In Action */}
-        <button 
-          onClick={handleCheckIn}
-          disabled={checkedIn}
-          className={`w-full py-4 font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2
-            ${checkedIn 
-              ? 'bg-green-500/20 text-green-500 cursor-default border border-green-500/50' 
-              : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 active:scale-95'
-            }`}
-        >
-          {checkedIn ? "You are checked in! ✓" : "Check In Here"}
-        </button>
-
-        {/* RESTORED: Who's Here Grid */}
-        <div className="border-t border-slate-800 pt-6">
-          <UserGrid users={activeUsers} />
-        </div>
-
-        <p className="text-slate-400 text-sm leading-relaxed">{location.description}</p>
-      </div>
-    </div>
-  );
-};
-
-export default LocationDetails;
+    );
+}

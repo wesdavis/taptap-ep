@@ -1,19 +1,3 @@
-You are absolutely right to hesitate. 🛑
-
-I apologize for the confusion. The UserGrid code I sent in the previous step was a simplified "Display Only" version that lost all the functionality you clearly already have (like the ability to "Tap" users, check gender permissions, and handle real-time updates).
-
-Do NOT replace your existing complex file with the simple one I sent. You would lose the "Tap" feature.
-
-Instead, let's keep your "Smart" UserGrid but make two small adjustments so it works with the new database schema we just built (specifically using display_name instead of full_name).
-
-Here is the correct path forward:
-
-Step 1: Update UserGrid.jsx (Keep the Logic, Fix the Name)
-We will keep your logic but update the query to pull the new display_name field we added to the database.
-
-Replace src/components/location/UserGrid.jsx with this: (This preserves your Tapping/Pinging logic)
-
-JavaScript
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
@@ -39,7 +23,6 @@ export default function UserGrid({ locationId }) {
             fetchMySentPings();
         }
 
-        // Realtime listener for new check-ins
         const channel = supabase
             .channel(`grid-updates-optimized`)
             .on(
@@ -76,10 +59,8 @@ export default function UserGrid({ locationId }) {
             
             if (error) throw error;
             if (data) {
-                setUsers(data
-                    .filter(u => u.user_id !== user.id) // Don't show myself
-                    .filter(u => u.profiles) 
-                );
+                // FIX: Removed the filter that hid your own face
+                setUsers(data.filter(u => u.profiles));
             }
         } catch (e) { console.log("Grid fetch error:", e); }
     }
@@ -101,7 +82,6 @@ export default function UserGrid({ locationId }) {
     const handleTap = async (e, targetUserId, targetName) => {
         e.stopPropagation(); 
         
-        // Check if I am checked in
         const { data: myCheckin } = await supabase
             .from('checkins')
             .select('location_id')
@@ -143,17 +123,16 @@ export default function UserGrid({ locationId }) {
         </div>
     );
 
-    // Only women (or non-binary/others if you choose) can initiate pings?
-    // Adjust logic as needed. Currently checks if gender == female.
-    const canPing = (myGender || '').toLowerCase() === 'female';
+    const canPing = (myGender || '').toLowerCase() === 'female' || !myGender;
 
     return (
         <div className="space-y-3">
-             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Who's Here ({users.length})
             </h3>
             <div className="grid grid-cols-4 gap-4">
                 {users.map((item) => {
+                    const isMe = item.user_id === user.id; // Check if this is me
                     const isPinged = sentPings.has(item.user_id);
                     const isTappingThisUser = tappingUserId === item.user_id;
                     const profile = item.profiles; 
@@ -162,20 +141,19 @@ export default function UserGrid({ locationId }) {
                     return (
                         <div key={item.user_id} className="flex flex-col items-center group relative">
                             <div 
-                                className="relative mb-1 cursor-pointer transition-transform active:scale-95"
+                                className="relative mb-2 cursor-pointer transition-transform active:scale-95"
                                 onClick={() => navigate(`/user/${item.user_id}`)}
                             >
-                                <div className="relative w-14 h-14 rounded-full bg-slate-800 border-2 border-amber-500/50 p-0.5 overflow-hidden">
+                                <div className={`relative w-14 h-14 rounded-full bg-slate-800 border-2 p-0.5 overflow-hidden ${isMe ? 'border-amber-500' : 'border-slate-700'}`}>
                                     <Avatar className="w-full h-full">
                                         <AvatarImage src={profile?.avatar_url} className="object-cover" />
                                         <AvatarFallback><User className="w-6 h-6 text-slate-400" /></AvatarFallback>
                                     </Avatar>
-                                    {/* Online Dot */}
-                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-900 rounded-full"></div>
+                                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full"></div>
                                 </div>
                                 
-                                {/* TAP BUTTON - Only show if allowed */}
-                                {canPing && (
+                                {/* TAP BUTTON (Only show for others, not myself) */}
+                                {canPing && !isMe && (
                                     <Button
                                         size="sm"
                                         disabled={isPinged || isTappingThisUser}
@@ -197,8 +175,8 @@ export default function UserGrid({ locationId }) {
                                 )}
                             </div>
 
-                            <span className="text-xs text-slate-300 truncate w-16 text-center mt-2">
-                                {displayName.split(' ')[0]}
+                            <span className="text-xs text-slate-300 truncate w-16 text-center">
+                                {isMe ? "You" : displayName.split(' ')[0]}
                             </span>
                         </div>
                     );
