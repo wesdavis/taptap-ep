@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Clock, Loader2, Star } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut } from 'lucide-react';
 import UserGrid from '../components/location/UserGrid'; 
 
 const LocationDetails = () => {
@@ -51,14 +51,11 @@ const LocationDetails = () => {
 
   const handleCheckIn = async () => {
     if (!user) return navigate('/auth');
-    if (checkedIn) return;
+    if (checkedIn) return; // Prevent double check-in
 
     try {
-      // 1. Check out of everywhere else (Requires the new UPDATE Policy!)
-      await supabase
-        .from('checkins')
-        .update({ is_active: false })
-        .eq('user_id', user.id);
+      // 1. Check out of everywhere else first
+      await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
 
       // 2. Check in here
       const { error } = await supabase.from('checkins').insert({
@@ -71,11 +68,34 @@ const LocationDetails = () => {
       
       setCheckedIn(true);
       setActiveCount(prev => prev + 1);
-      setGridRefreshKey(prev => prev + 1); // Refresh the grid!
+      setGridRefreshKey(prev => prev + 1);
 
     } catch (error) {
       console.error("Check-in failed:", error);
       alert("Could not check in.");
+    }
+  };
+
+  const handleCheckOut = async () => {
+    if (!user) return;
+    try {
+        // 1. Mark as inactive
+        const { error } = await supabase
+            .from('checkins')
+            .update({ is_active: false })
+            .eq('user_id', user.id)
+            .eq('location_id', id);
+
+        if (error) throw error;
+
+        // 2. Update UI
+        setCheckedIn(false);
+        setActiveCount(prev => Math.max(0, prev - 1));
+        setGridRefreshKey(prev => prev + 1); // Refresh grid to remove my face
+
+    } catch (error) {
+        console.error("Check-out failed", error);
+        alert("Could not check out.");
     }
   };
 
@@ -99,7 +119,6 @@ const LocationDetails = () => {
             className="w-full h-full object-cover" 
         />
         
-        {/* FIX: z-50 forces button to be on top of everything */}
         <button 
           onClick={() => navigate('/')}
           className="absolute top-4 left-4 p-3 bg-black/60 backdrop-blur-md rounded-full text-white z-50 hover:bg-black/80 transition"
@@ -127,7 +146,6 @@ const LocationDetails = () => {
         </div>
       </div>
 
-      {/* Content */}
       <div className="p-6 space-y-8">
         <div className="bg-slate-900/50 p-5 rounded-xl border border-slate-800 space-y-4">
           <div className="flex items-center gap-4 text-slate-300">
@@ -140,17 +158,33 @@ const LocationDetails = () => {
           </div>
         </div>
 
-        <button 
-          onClick={handleCheckIn}
-          disabled={checkedIn}
-          className={`w-full py-4 font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2
-            ${checkedIn 
-              ? 'bg-green-500/20 text-green-500 cursor-default border border-green-500/50' 
-              : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 active:scale-95'
-            }`}
-        >
-          {checkedIn ? "You are checked in! ✓" : "Check In Here"}
-        </button>
+        {/* CHECK IN / CHECK OUT BUTTONS */}
+        <div className="w-full">
+            {!checkedIn ? (
+                <button 
+                    onClick={handleCheckIn}
+                    className="w-full py-4 font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 active:scale-95"
+                >
+                    Check In Here
+                </button>
+            ) : (
+                <div className="flex gap-3">
+                    <button 
+                        disabled
+                        className="flex-1 py-4 font-bold rounded-xl flex items-center justify-center gap-2 bg-green-500/20 text-green-500 border border-green-500/50 cursor-default"
+                    >
+                        You're Checked In ✓
+                    </button>
+                    <button 
+                        onClick={handleCheckOut}
+                        className="px-6 py-4 font-bold rounded-xl flex items-center justify-center gap-2 bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20 transition active:scale-95"
+                    >
+                        <LogOut size={20} />
+                        Leave
+                    </button>
+                </div>
+            )}
+        </div>
 
         {/* User Grid */}
         <div className="border-t border-slate-800 pt-6">
