@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Clock, Loader2, Star, MessageSquare } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Loader2, Star } from 'lucide-react';
+import UserGrid from '../components/location/UserGrid'; // Import the grid
 
 const LocationDetails = () => {
-  const { id } = useParams(); // Returns string "1", "2" etc.
+  const { id } = useParams(); 
   const { user } = useAuth();
   const navigate = useNavigate();
   
   const [location, setLocation] = useState(null);
-  const [activeCount, setActiveCount] = useState(0); 
+  const [activeUsers, setActiveUsers] = useState([]); // List of actual people
   const [checkedIn, setCheckedIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -18,28 +19,37 @@ const LocationDetails = () => {
     const fetchLocationData = async () => {
       try {
         setLoading(true);
-        // 1. Fetch Location
+        // 1. Fetch Location Info
         const { data: locData, error } = await supabase.from('locations').select('*').eq('id', id).single();
         if (error) throw error;
         setLocation(locData);
 
-        // 2. Fetch Active Check-ins (Using your 'is_active' column)
-        const { count } = await supabase.from('checkins')
-          .select('*', { count: 'exact', head: true })
+        // 2. Fetch People (Check-ins + Profile Data)
+        // We join the 'profiles' table to get names and photos
+        const { data: peopleData, error: peopleError } = await supabase
+          .from('checkins')
+          .select(`
+            id,
+            user_id,
+            profiles (
+              id,
+              display_name,
+              full_name,
+              avatar_url,
+              handle
+            )
+          `)
           .eq('location_id', id)
-          .eq('is_active', true); // Only count people currently there
-        
-        setActiveCount(count || 0);
+          .eq('is_active', true); // Only show people currently here
+
+        if (!peopleError) {
+          setActiveUsers(peopleData || []);
+        }
 
         // 3. Am I checked in?
         if (user) {
-           const { data: myCheckin } = await supabase.from('checkins')
-             .select('*')
-             .eq('user_id', user.id)
-             .eq('location_id', id)
-             .eq('is_active', true)
-             .maybeSingle();
-           if (myCheckin) setCheckedIn(true);
+           const amIHere = peopleData?.some(p => p.user_id === user.id);
+           if (amIHere) setCheckedIn(true);
         }
 
       } catch (err) { console.error(err); } 
@@ -53,8 +63,7 @@ const LocationDetails = () => {
     if (checkedIn) return;
 
     try {
-      // Insert check-in. Note: Postgres handles string "1" -> bigint 1 conversion automatically usually, 
-      // but strictly speaking your checkins.location_id is TEXT, so passing string is perfect.
+      // Create check-in
       const { error } = await supabase.from('checkins').insert({
         user_id: user.id,
         location_id: id,
@@ -63,8 +72,16 @@ const LocationDetails = () => {
 
       if (error) throw error;
       
+      // Update local state immediately so you appear in the grid
       setCheckedIn(true);
-      setActiveCount(prev => prev + 1);
+      
+      // Fetch your own profile to add to the list locally (avoids a reload)
+      const { data: myProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      
+      setActiveUsers(prev => [
+        ...prev, 
+        { id: 'temp-id', user_id: user.id, profiles: myProfile }
+      ]);
 
     } catch (error) {
       console.error("Check-in failed:", error);
@@ -78,10 +95,18 @@ const LocationDetails = () => {
   return (
     <div className="min-h-screen bg-slate-950 pb-20">
       
-      {/* Hero */}
+      {/* Hero Image */}
       <div className="relative h-72">
         <img src={location.image_url} alt={location.name} className="w-full h-full object-cover" />
-        <button onClick={() => navigate('/')} className="absolute top-4 left-4 p-2 bg-black/50 backdrop-blur-md rounded-full text-white"><ArrowLeft size={24} /></button>
+        
+        {/* FIX: Added z-10 so the gradient doesn't block clicks */}
+        <button 
+          onClick={() => navigate('/')}
+          className="absolute top-4 left-4 p-2 bg-black/50 backdrop-blur-md rounded-full text-white z-10 hover:bg-black/70 transition"
+        >
+          <ArrowLeft size={24} />
+        </button>
+
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent" />
         
         <div className="absolute bottom-0 left-0 p-6 w-full">
@@ -95,35 +120,30 @@ const LocationDetails = () => {
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-amber-500 text-black text-xs font-bold rounded-full uppercase">{location.type}</span>
             <div className="flex items-center gap-1.5 text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
-              <span className={`w-2 h-2 rounded-full bg-green-500 ${activeCount > 0 ? 'animate-pulse' : ''}`}></span>
-              <span className="text-xs font-medium">{activeCount === 0 ? "Be the first here" : `${activeCount} checked in`}</span>
+              <span className={`w-2 h-2 rounded-full bg-green-500 ${activeUsers.length > 0 ? 'animate-pulse' : ''}`}></span>
+              <span className="text-xs font-medium">
+                {activeUsers.length === 0 ? "Be the first here" : `${activeUsers.length} checked in`}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Info Grid */}
-      <div className="p-6 space-y-6">
-        <p className="text-slate-300 text-lg">{location.description}</p>
-
+      {/* Content */}
+      <div className="p-6 space-y-8">
+        {/* Info Box */}
         <div className="bg-slate-900/50 p-5 rounded-xl border border-slate-800 space-y-4">
           <div className="flex items-center gap-4 text-slate-300">
             <Clock className="text-amber-500 w-5 h-5 shrink-0" />
-            <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-bold">Hours</span>
-              <span>{location.hours || "Open Daily"}</span>
-            </div>
+            <span>{location.hours || "Open Daily"}</span>
           </div>
-
           <div className="flex items-center gap-4 text-slate-300">
             <MapPin className="text-amber-500 w-5 h-5 shrink-0" />
-            <div className="flex flex-col">
-              <span className="text-xs text-slate-500 uppercase font-bold">Location</span>
-              <span>{location.address || "El Paso, TX"}</span>
-            </div>
+            <span>{location.address || "El Paso, TX"}</span>
           </div>
         </div>
 
+        {/* Check In Action */}
         <button 
           onClick={handleCheckIn}
           disabled={checkedIn}
@@ -133,12 +153,15 @@ const LocationDetails = () => {
               : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 active:scale-95'
             }`}
         >
-          {checkedIn ? (
-            <>You are checked in! ✓</>
-          ) : (
-            <>Check In Here</>
-          )}
+          {checkedIn ? "You are checked in! ✓" : "Check In Here"}
         </button>
+
+        {/* RESTORED: Who's Here Grid */}
+        <div className="border-t border-slate-800 pt-6">
+          <UserGrid users={activeUsers} />
+        </div>
+
+        <p className="text-slate-400 text-sm leading-relaxed">{location.description}</p>
       </div>
     </div>
   );
