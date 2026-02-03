@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, MapPin, Clock, Users, Star, MessageSquare } from 'lucide-react'; // Added icons
+import { useAuth } from '../lib/AuthContext';
+import { ArrowLeft, MapPin, Clock, Loader2, Star, MessageSquare } from 'lucide-react';
 
 const LocationDetails = () => {
-  const { id } = useParams(); 
+  const { id } = useParams(); // Returns string "1", "2" etc.
+  const { user } = useAuth();
   const navigate = useNavigate();
+  
   const [location, setLocation] = useState(null);
   const [activeCount, setActiveCount] = useState(0); 
+  const [checkedIn, setCheckedIn] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,18 +23,56 @@ const LocationDetails = () => {
         if (error) throw error;
         setLocation(locData);
 
-        // 2. Fetch Pings Count (Real data)
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabase.from('pings').select('*', { count: 'exact', head: true }).eq('location_id', id).gte('created_at', twoHoursAgo);
+        // 2. Fetch Active Check-ins (Using your 'is_active' column)
+        const { count } = await supabase.from('checkins')
+          .select('*', { count: 'exact', head: true })
+          .eq('location_id', id)
+          .eq('is_active', true); // Only count people currently there
+        
         setActiveCount(count || 0);
+
+        // 3. Am I checked in?
+        if (user) {
+           const { data: myCheckin } = await supabase.from('checkins')
+             .select('*')
+             .eq('user_id', user.id)
+             .eq('location_id', id)
+             .eq('is_active', true)
+             .maybeSingle();
+           if (myCheckin) setCheckedIn(true);
+        }
 
       } catch (err) { console.error(err); } 
       finally { setLoading(false); }
     };
     fetchLocationData();
-  }, [id]);
+  }, [id, user]);
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500">Loading...</div>;
+  const handleCheckIn = async () => {
+    if (!user) return navigate('/auth');
+    if (checkedIn) return;
+
+    try {
+      // Insert check-in. Note: Postgres handles string "1" -> bigint 1 conversion automatically usually, 
+      // but strictly speaking your checkins.location_id is TEXT, so passing string is perfect.
+      const { error } = await supabase.from('checkins').insert({
+        user_id: user.id,
+        location_id: id,
+        is_active: true
+      });
+
+      if (error) throw error;
+      
+      setCheckedIn(true);
+      setActiveCount(prev => prev + 1);
+
+    } catch (error) {
+      console.error("Check-in failed:", error);
+      alert("Could not check in.");
+    }
+  };
+
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
   if (!location) return <div className="min-h-screen bg-slate-950 p-10 text-white">Location not found. <button onClick={() => navigate('/')}>Back</button></div>;
 
   return (
@@ -53,8 +95,8 @@ const LocationDetails = () => {
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-amber-500 text-black text-xs font-bold rounded-full uppercase">{location.type}</span>
             <div className="flex items-center gap-1.5 text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span className="text-xs font-medium">{activeCount === 0 ? "Quiet" : `${activeCount} here`}</span>
+              <span className={`w-2 h-2 rounded-full bg-green-500 ${activeCount > 0 ? 'animate-pulse' : ''}`}></span>
+              <span className="text-xs font-medium">{activeCount === 0 ? "Be the first here" : `${activeCount} checked in`}</span>
             </div>
           </div>
         </div>
@@ -77,36 +119,26 @@ const LocationDetails = () => {
             <MapPin className="text-amber-500 w-5 h-5 shrink-0" />
             <div className="flex flex-col">
               <span className="text-xs text-slate-500 uppercase font-bold">Location</span>
-              <span>{location.address}</span>
+              <span>{location.address || "El Paso, TX"}</span>
             </div>
           </div>
         </div>
 
-        {/* Reviews Preview (Static for now) */}
-        <div>
-          <h3 className="text-white font-bold mb-3 flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-amber-500" /> 
-            Recent Reviews
-          </h3>
-          <div className="space-y-3">
-             <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-                <div className="flex justify-between mb-2">
-                   <span className="text-white font-bold text-sm">Sarah J.</span>
-                   <div className="flex text-yellow-400"><Star size={12} fill="currentColor" /><Star size={12} fill="currentColor" /><Star size={12} fill="currentColor" /><Star size={12} fill="currentColor" /><Star size={12} fill="currentColor" /></div>
-                </div>
-                <p className="text-slate-400 text-sm">"Absolutely love the vibe here. The lighting is perfect!"</p>
-             </div>
-             <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-                <div className="flex justify-between mb-2">
-                   <span className="text-white font-bold text-sm">Mike T.</span>
-                   <div className="flex text-yellow-400"><Star size={12} fill="currentColor" /><Star size={12} fill="currentColor" /><Star size={12} fill="currentColor" /><Star size={12} fill="currentColor" /></div>
-                </div>
-                <p className="text-slate-400 text-sm">"Great drinks, but it gets super crowded on weekends."</p>
-             </div>
-          </div>
-        </div>
-
-        <button className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl shadow-lg">Check In / Ping</button>
+        <button 
+          onClick={handleCheckIn}
+          disabled={checkedIn}
+          className={`w-full py-4 font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2
+            ${checkedIn 
+              ? 'bg-green-500/20 text-green-500 cursor-default border border-green-500/50' 
+              : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 active:scale-95'
+            }`}
+        >
+          {checkedIn ? (
+            <>You are checked in! ✓</>
+          ) : (
+            <>Check In Here</>
+          )}
+        </button>
       </div>
     </div>
   );
