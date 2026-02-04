@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 export default function PublicProfile() {
   const { id } = useParams(); // The ID of the person you are looking at
   const { user } = useAuth();
+  console.log("Current User ID:", user?.id);
+  console.log("Target User ID (from URL):", userId);
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
