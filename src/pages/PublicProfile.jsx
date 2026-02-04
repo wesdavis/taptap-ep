@@ -1,238 +1,188 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Zap, Check, Loader2, User, Trophy, Calendar } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/AuthContext';
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, MapPin, Zap, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PublicProfile() {
-  const { id } = useParams(); // The ID of the person you are looking at
-  const { user } = useAuth();
-  console.log("Current User ID:", user?.id);
-  console.log("Target User ID (from URL):", userId);
-  const navigate = useNavigate();
+    const params = useParams();
+    // 🟢 CRITICAL FIX: Define 'userId' here so the rest of the file can use it.
+    // This checks for EITHER 'userId' (CamelCase) OR 'userid' (lowercase)
+    const userId = params.userId || params.userid;
 
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [pingStatus, setPingStatus] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
-  const [mutualLocation, setMutualLocation] = useState(null);
+    const { user } = useAuth();
+    const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [status, setStatus] = useState(null);
+    const [myGender, setMyGender] = useState(null);
+    const [myLiveLocation, setMyLiveLocation] = useState(null); 
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-        // 1. Fetch Their Profile
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', id)
-          .single();
-        
-        if (error) throw error;
-        setProfile(profileData);
+    useEffect(() => {
+        // Debugging logs
+        console.log("Looking for User ID:", userId);
 
-        // 2. Check if we are both at the same location
-        if (user) {
-          // Get my active location
-          const { data: myCheckIn } = await supabase
-            .from('checkins')
-            .select('location_id')
-            .eq('user_id', user.id)
-            .eq('is_active', true)
-            .maybeSingle();
+        if (user && userId && userId !== "undefined") {
+            loadUniversalData();
+        } else if (!userId || userId === "undefined") {
+            console.error("Error: userId is missing from URL parameters.");
+            setLoading(false);
+        }
+    }, [user, userId]);
 
-          // Get their active location
-          const { data: theirCheckIn } = await supabase
-            .from('checkins')
-            .select('location_id, locations(name)')
-            .eq('user_id', id)
-            .eq('is_active', true)
-            .maybeSingle();
+    async function loadUniversalData() {
+        try {
+            // 1. Fetch Target User
+            const { data: profileData, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId) // Now this variable definitely exists!
+                .single();
+            
+            if (error) throw error;
+            setProfile(profileData);
 
-          // If match, store it
-          if (myCheckIn && theirCheckIn && myCheckIn.location_id === theirCheckIn.location_id) {
-            setMutualLocation(theirCheckIn.locations?.name);
-          }
+            // 2. Fetch MY Gender
+            const { data: myProfile } = await supabase
+                .from('profiles')
+                .select('gender')
+                .eq('id', user.id)
+                .single();
+            setMyGender(myProfile?.gender);
 
-          // 3. Check if I already tapped them
-          const { data: existingPing } = await supabase
-            .from('pings')
-            .select('*')
-            .eq('from_user_id', user.id)
-            .eq('to_user_id', id)
-            .is('met_confirmed', null) // Only check active, unmet pings
-            .maybeSingle();
+            // 3. Check MY Location
+            const { data: myCheckin } = await supabase
+                .from('checkins')
+                .select('location_id')
+                .eq('user_id', user.id)
+                .eq('is_active', true)
+                .maybeSingle();
 
-          if (existingPing) setPingStatus('sent');
+            if (myCheckin) {
+                setMyLiveLocation(myCheckin.location_id);
+            }
+
+            // 4. Check Status
+            const { data: ping } = await supabase
+                .from('pings')
+                .select('status')
+                .eq('from_user_id', user.id)
+                .eq('to_user_id', userId)
+                .maybeSingle();
+
+            if (ping) setStatus(ping.status || 'pending');
+
+        } catch (error) {
+            console.error("Error loading profile:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const handleUniversalTap = async () => {
+        if (!myLiveLocation) {
+            toast.error("You must be checked in to a location to tap!");
+            return;
         }
 
-      } catch (err) {
-        console.error('Error loading profile:', err);
-      } finally {
-        setLoading(false);
-      }
+        setIsSubmitting(true);
+
+        try {
+            const { error } = await supabase.from('pings').insert({
+                from_user_id: user.id,
+                to_user_id: userId,
+                location_id: myLiveLocation,
+                status: 'pending'
+            });
+
+            if (error) throw error;
+            
+            setStatus('pending');
+            toast.success(`You tapped ${profile.full_name}!`);
+        } catch (error) {
+            console.error(error);
+            toast.error("Could not send tap. Try refreshing.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    fetchData();
-  }, [id, user]);
-
-  const handleTap = async () => {
-    if (!user) return navigate('/auth');
-    if (!mutualLocation) {
-        toast.error("You must be at the same location to tap!");
-        return;
-    }
-
-    try {
-      setPingStatus('sending');
-
-      // 1. Get Location ID
-      const { data: checkIn } = await supabase
-        .from('checkins')
-        .select('location_id')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single();
-
-      if (!checkIn) throw new Error("You are not checked in anywhere.");
-
-      // 2. Insert Ping
-      const { error } = await supabase.from('pings').insert({
-        from_user_id: user.id,
-        to_user_id: id,
-        location_id: checkIn.location_id,
-        status: 'pending'
-      });
-
-      if (error) throw error;
-
-      // 3. Success State
-      setPingStatus('sent');
-      toast.success(`You tapped ${profile.display_name}!`);
-
-    } catch (err) {
-      console.error(err);
-      toast.error("Could not send tap. Try again.");
-      setPingStatus('idle');
-    }
-  };
-
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
-  if (!profile) return <div className="min-h-screen bg-slate-950 p-10 text-white text-center">User not found <br/><button onClick={()=>navigate(-1)} className="mt-4 text-amber-500">Go Back</button></div>;
-
-  // Calculate Age
-  const getAge = (dateString) => {
-    if (!dateString) return null;
-    const today = new Date();
-    const birthDate = new Date(dateString);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-    return age;
-  };
-
-  const age = getAge(profile.birthdate);
-
-  return (
-    <div className="min-h-screen bg-slate-950 pb-10">
-      
-      {/* Header Image / Pattern */}
-      <div className="h-40 bg-gradient-to-br from-slate-900 to-slate-800 relative">
-        <button 
-          onClick={() => navigate('/')}
-          className="absolute top-4 left-4 p-2 bg-black/30 backdrop-blur-md rounded-full text-white hover:bg-black/50 transition z-10"
-        >
-          <ArrowLeft size={24} />
-        </button>
-        <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-      </div>
-
-      {/* Profile Content */}
-      <div className="px-4 -mt-16 relative z-10">
-        
-        {/* Avatar */}
-        <div className="w-32 h-32 rounded-full border-4 border-slate-950 bg-slate-800 mx-auto overflow-hidden shadow-2xl relative">
-          {profile.avatar_url ? (
-            <img src={profile.avatar_url} className="w-full h-full object-cover" />
-          ) : (
-            <User className="w-12 h-12 text-slate-500 m-auto mt-8" />
-          )}
+    if (loading) return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+            <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
         </div>
+    );
 
-        {/* Identity */}
-        <div className="text-center mt-4">
-          <h1 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
-            {profile.display_name} 
-            {age && <span className="text-lg font-normal text-slate-400">, {age}</span>}
-          </h1>
-          <p className="text-amber-500 font-medium">@{profile.handle}</p>
-          
-          {/* XP Badge */}
-          <div className="inline-flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-full px-3 py-1 mt-3">
-            <Trophy className="w-3 h-3 text-yellow-500" />
-            <span className="text-xs text-slate-300 font-bold">{profile.xp || 0} XP</span>
-          </div>
-        </div>
+    if (!profile) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">User not found</div>;
 
-        {/* Bio Card */}
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 mt-6 shadow-lg">
-           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">About</h3>
-           <p className="text-slate-300 leading-relaxed text-sm">
-             {profile.bio || "No bio yet."}
-           </p>
+    const isFemale = (myGender || '').toLowerCase() === 'female';
 
-           <div className="mt-6 flex flex-wrap gap-2">
-              {profile.gender && (
-                 <span className="px-3 py-1 bg-slate-800 rounded-lg text-xs text-slate-400 border border-slate-700">
-                    {profile.gender}
-                 </span>
-              )}
-              {profile.looking_for && (
-                 <span className="px-3 py-1 bg-slate-800 rounded-lg text-xs text-slate-400 border border-slate-700">
-                    Looking for: {profile.looking_for}
-                 </span>
-              )}
-           </div>
-        </div>
+    return (
+        <div className="min-h-screen bg-slate-950 text-white p-4 pb-32">
+            <div className="flex items-center gap-4 mb-8">
+                <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-slate-400">
+                    <ArrowLeft className="w-6 h-6" />
+                </Button>
+                <h1 className="text-lg font-bold">Profile</h1>
+            </div>
 
-        {/* Action Area */}
-        <div className="fixed bottom-0 left-0 w-full p-4 bg-slate-950/80 backdrop-blur-lg border-t border-slate-900">
-            {mutualLocation ? (
-                <button
-                    onClick={handleTap}
-                    disabled={pingStatus === 'sent' || pingStatus === 'sending'}
-                    className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg ${
-                        pingStatus === 'sent' 
-                        ? 'bg-slate-800 text-slate-400 cursor-default'
-                        : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20'
-                    }`}
-                >
-                    {pingStatus === 'sending' ? (
-                        <Loader2 className="animate-spin w-5 h-5" />
-                    ) : pingStatus === 'sent' ? (
-                        <>
-                           <Check className="w-5 h-5" />
-                           Sent!
-                        </>
-                    ) : (
-                        <>
-                           <Zap className="w-5 h-5 fill-black" />
-                           Tap to Connect
-                        </>
-                    )}
-                </button>
-            ) : (
-                <div className="w-full py-3 bg-slate-900 rounded-xl border border-slate-800 text-center">
-                    <p className="text-slate-500 text-sm flex items-center justify-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        You must be at the same location to tap.
-                    </p>
+            <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+                <Avatar className="w-32 h-32 border-4 border-amber-500/20 mb-4 shadow-2xl">
+                    <AvatarImage src={profile.avatar_url} />
+                    <AvatarFallback className="text-4xl bg-slate-800">{profile.full_name?.[0]}</AvatarFallback>
+                </Avatar>
+
+                <h2 className="text-3xl font-bold mb-2 text-center">{profile.full_name}</h2>
+                
+                <div className="flex items-center gap-2 text-slate-400 mb-6">
+                    <MapPin className="w-4 h-4" /> 
+                    <span>El Paso, TX</span>
                 </div>
-            )}
-        </div>
 
-      </div>
-    </div>
-  );
+                <div className="w-full max-w-xs bg-white/5 rounded-2xl p-6 border border-white/10 mb-8 text-center">
+                    <p className="text-slate-300 italic">"{profile.bio || 'Just checking in.'}"</p>
+                </div>
+
+                <div className="flex gap-3">
+                    <Badge variant="secondary" className="bg-slate-800 text-slate-300 px-3 py-1">
+                        {profile.gender || 'User'}
+                    </Badge>
+                </div>
+
+                {/* Show Tap Button ONLY if I am Female and haven't tapped yet */}
+                {isFemale && status === null && (
+                    <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
+                        <Button 
+                            disabled={isSubmitting}
+                            className="w-full h-14 text-lg font-bold bg-amber-500 hover:bg-amber-600 text-black shadow-lg shadow-amber-900/20 rounded-2xl animate-in slide-in-from-bottom-4 disabled:opacity-50"
+                            onClick={handleUniversalTap}
+                        >
+                            {isSubmitting ? (
+                                <Loader2 className="w-5 h-5 animate-spin mr-2" /> 
+                            ) : (
+                                <>
+                                    <Zap className="w-5 h-5 mr-2 fill-black" /> TAP TO CONNECT
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                )}
+
+                {/* Show "Sent" button if already pending */}
+                {isFemale && status === 'pending' && (
+                    <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
+                        <Button disabled className="w-full h-14 text-lg font-bold bg-slate-800 text-slate-400 border border-slate-700 rounded-2xl">
+                            <Check className="w-5 h-5 mr-2" /> TAP SENT
+                        </Button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 }
