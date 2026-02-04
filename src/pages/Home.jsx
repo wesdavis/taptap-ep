@@ -5,6 +5,7 @@ import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
 import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut } from 'lucide-react';
+import { toast } from 'sonner'; // Ensure you have this installed, or use standard alert
 
 // Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -54,54 +55,43 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // 2. Fetch Gamification Data (Sent Pings)
-          const { data: sentData, error: sentError } = await supabase
+          // 2. Fetch Sent Pings (Missions)
+          const { data: sentData } = await supabase
             .from('pings')
-            // FIX: explicitly link 'to_user_id' to profiles
-            .select(`*, receiver:profiles!to_user_id(*)`)
+            .select(`*, receiver:profiles!to_user_id(*)`) 
             .eq('from_user_id', user.id)
             .is('met_confirmed', null)
             .order('created_at', { ascending: false });
-            
-          if (sentError) console.error("Sent Pings Error:", sentError);
           setActiveMissions(sentData || []);
 
-          // 3. Fetch Gamification Data (Received Pings)
-          const { data: receivedData, error: recError } = await supabase
+          // 3. Fetch Received Pings (Mysteries)
+          const { data: receivedData } = await supabase
             .from('pings')
-            // FIX: explicitly link 'from_user_id' to profiles
-            .select(`*, sender:profiles!from_user_id(*)`)
+            .select(`*, sender:profiles!from_user_id(*)`) 
             .eq('to_user_id', user.id)
             .is('met_confirmed', null)
             .order('created_at', { ascending: false });
-
-          if (recError) console.error("Received Pings Error:", recError);
           setMysteryPings(receivedData || []);
 
-          // 4. Fetch Current Active Check-in
+          // 4. Fetch Check-in
           const { data: myCheckIn } = await supabase
             .from('checkins')
             .select(`*, locations (*)`)
             .eq('user_id', user.id)
             .eq('is_active', true)
             .maybeSingle();
-            
           setCurrentCheckIn(myCheckIn);
 
-          // 5. If checked in, fetch everyone else there
           if (myCheckIn) {
             const { data: people } = await supabase
                 .from('checkins')
                 .select(`user_id, profiles:user_id ( id, display_name, avatar_url, handle )`)
                 .eq('location_id', myCheckIn.location_id)
                 .eq('is_active', true);
-            
-            // Filter out myself
             setActiveUsersAtLocation(people?.filter(p => p.user_id !== user.id) || []);
           }
         }
 
-        // 6. Fetch All Locations
         const { data: locData } = await supabase.from('locations').select('*');
         setLocations(locData || []);
       } catch (err) { console.error('Error:', err); } finally { setLoading(false); }
@@ -116,6 +106,22 @@ const Home = () => {
         setCurrentCheckIn(null);
         setActiveUsersAtLocation([]);
     } catch (error) { console.error(error); }
+  };
+
+  // 🟢 NEW: Handle Cancelling a Ping
+  const handleCancelPing = async (pingId) => {
+    // 1. Remove from UI immediately (Optimistic update)
+    setActiveMissions(prev => prev.filter(p => p.id !== pingId));
+    setMysteryPings(prev => prev.filter(p => p.id !== pingId));
+    
+    // 2. Remove from DB
+    const { error } = await supabase.from('pings').delete().eq('id', pingId);
+    if (error) {
+        console.error(error);
+        toast.error("Failed to cancel ping");
+    } else {
+        toast.success("Card dismissed");
+    }
   };
 
   const sortedLocations = useMemo(() => {
@@ -134,7 +140,6 @@ const Home = () => {
 
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
-      {/* Dashboard Header */}
       <div className="bg-slate-900 border-b border-slate-800 p-6 rounded-b-3xl shadow-2xl mb-6">
         <div className="flex justify-between items-start mb-6">
           <div className="flex items-center gap-4">
@@ -157,8 +162,21 @@ const Home = () => {
         
         {/* GAME LAYER */}
         <div className="space-y-4">
-           {activeMissions.map(ping => <MissionCard key={ping.id} ping={ping} onComplete={() => window.location.reload()} />)}
-           {mysteryPings.map(ping => <MysteryCard key={ping.id} ping={ping} />)}
+           {activeMissions.map(ping => (
+                <MissionCard 
+                    key={ping.id} 
+                    ping={ping} 
+                    onCancel={() => handleCancelPing(ping.id)} 
+                    onComplete={() => window.location.reload()} 
+                />
+            ))}
+           {mysteryPings.map(ping => (
+                <MysteryCard 
+                    key={ping.id} 
+                    ping={ping} 
+                    onCancel={() => handleCancelPing(ping.id)} 
+                />
+            ))}
         </div>
       </div>
 

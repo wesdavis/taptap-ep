@@ -1,75 +1,65 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Check, ShieldCheck, Loader2, Sparkles } from 'lucide-react';
-import confetti from 'canvas-confetti'; // We'll install this: npm install canvas-confetti
-import { supabase } from '@/lib/supabase';
+import { X, Check } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
+import { useState } from 'react';
 
-export default function MissionCard({ ping, onComplete }) {
+export default function MissionCard({ ping, onComplete, onCancel }) {
   const [loading, setLoading] = useState(false);
 
-  const handleMet = async () => {
-    setLoading(true);
+  const handleConfirmMeet = async () => {
     try {
-      // 1. Update DB
-      const { error } = await supabase.from('pings').update({ met_confirmed: true }).eq('id', ping.id);
+      setLoading(true);
+      // Update DB to say "Met Confirmed"
+      const { error } = await supabase
+        .from('pings')
+        .update({ met_confirmed: true })
+        .eq('id', ping.id);
+
       if (error) throw error;
 
-      // 2. Add XP (Simple increment for now)
-      await supabase.rpc('increment_xp', { user_id: ping.from_user_id, amount: 50 });
-
-      // 3. CONFETTI TIME 🎉
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#F59E0B', '#FCD34D', '#FFFFFF']
-      });
-
-      toast.success("Mission Complete! +50 XP");
-      if(onComplete) onComplete();
-
+      toast.success("Mission Accomplished! +50 XP");
+      if (onComplete) onComplete();
     } catch (err) {
-      toast.error("Error updating mission");
+      console.error(err);
+      toast.error("Error confirming meet");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="w-full bg-slate-900 border border-amber-500/30 rounded-2xl p-4 relative overflow-hidden">
-       {/* Background Pulse */}
-       <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+    <div className="bg-amber-500/10 border border-amber-500/50 p-4 rounded-xl relative animate-in fade-in slide-in-from-bottom-2 duration-500">
+      
+      {/* 🔴 CANCEL BUTTON */}
+      <button 
+        onClick={onCancel}
+        className="absolute top-2 right-2 p-1 text-amber-500/50 hover:text-amber-500 hover:bg-amber-500/10 rounded-full transition"
+      >
+        <X size={16} />
+      </button>
 
-       <div className="flex items-start gap-4 relative z-10">
-          <div className="relative">
-             <img src={ping.receiver.avatar_url} className="w-14 h-14 rounded-full border-2 border-amber-500 object-cover" />
-             <div className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-               TARGET
-             </div>
-          </div>
-          
-          <div className="flex-1">
-             <h3 className="text-white font-bold text-lg">Mission: Meet {ping.receiver.display_name}</h3>
-             <p className="text-slate-400 text-xs mb-3 flex items-center gap-1">
-               <ShieldCheck className="w-3 h-3 text-green-500" />
-               Stay comfortable. Let him find you.
-             </p>
-
-             <button 
-               onClick={handleMet}
-               disabled={loading}
-               className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
-             >
-               {loading ? <Loader2 className="animate-spin w-4 h-4" /> : (
-                 <>
-                   <Sparkles className="w-4 h-4" />
-                   We Met! (Complete Mission)
-                 </>
-               )}
-             </button>
-          </div>
-       </div>
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full border-2 border-amber-500 p-0.5">
+           <img 
+             src={ping.receiver?.avatar_url} 
+             className="w-full h-full object-cover rounded-full bg-slate-800" 
+           />
+        </div>
+        <div>
+           <p className="text-xs text-amber-500 font-bold uppercase tracking-wider">Active Mission</p>
+           <p className="text-white font-bold">Find {ping.receiver?.display_name || "Agent"}</p>
+        </div>
+      </div>
+      
+      <div className="mt-3 flex gap-2">
+         <button 
+            disabled={loading}
+            onClick={handleConfirmMeet}
+            className="flex-1 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition"
+         >
+            <Check size={14} /> Found Them
+         </button>
+      </div>
     </div>
   );
 }
