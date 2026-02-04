@@ -61,7 +61,7 @@ export default function Achievements() {
         <button onClick={() => navigate('/')} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold">Hall of Fame</h1>
+        <h1 className="text-lg font-bold">Most Popular</h1>
       </div>
 
       {/* My Stats Card */}
@@ -100,7 +100,7 @@ export default function Achievements() {
       {/* Leaderboard */}
       <div className="px-4">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <Star className="w-4 h-4" /> Top Players
+            <Star className="w-4 h-4" /> Top Tappers
         </h3>
         <div className="space-y-3">
             {leaderboard.map((player, index) => (
@@ -122,7 +122,7 @@ export default function Achievements() {
       {/* How it Works */}
       <div className="p-6 mt-8 bg-slate-900 border-t border-slate-800">
          <h3 className="text-white font-bold flex items-center gap-2 mb-2">
-            <HelpCircle className="w-4 h-4 text-amber-500" /> How to Play
+            <HelpCircle className="w-4 h-4 text-amber-500" /> TAP TAP How It Works
          </h3>
          <ul className="text-slate-400 text-sm space-y-2 list-disc pl-4">
             <li><strong>Tap someone</strong> at a location to start a mission.</li>

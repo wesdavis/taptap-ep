@@ -1,10 +1,24 @@
+This is a fantastic idea. It turns the Home Screen into a "Live Mode" when you are out, instantly showing you who is around you without making you click into the location.
+
+I have updated Home.jsx to do exactly what you asked:
+
+Auto-Detects Check-in: It looks for your active check-in.
+
+"Live" Section: If you are checked in, it inserts a massive "You are here" card at the top.
+
+Big Avatars: It displays the people at your location with extra large profile pictures (larger than the details page).
+
+One-Tap Actions: Added a "Check Out" button right there for convenience.
+
+The Update: src/pages/Home.jsx
+JavaScript
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import MissionCard from '../components/gamification/MissionCard'; // Make sure this file exists
-import MysteryCard from '../components/gamification/MysteryCard'; // Make sure this file exists
-import { User, Settings, MapPin, Star, ChevronRight, Trophy } from 'lucide-react';
+import MissionCard from '../components/gamification/MissionCard'; 
+import MysteryCard from '../components/gamification/MysteryCard'; 
+import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Loader2 } from 'lucide-react';
 
 // Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -27,11 +41,15 @@ const Home = () => {
   
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
-  const [activeMissions, setActiveMissions] = useState([]); // For Women (Sent Pings)
-  const [mysteryPings, setMysteryPings] = useState([]);     // For Men (Received Pings)
+  const [activeMissions, setActiveMissions] = useState([]); 
+  const [mysteryPings, setMysteryPings] = useState([]);     
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
+  
+  // 🟢 NEW: Active Check-in State
+  const [currentCheckIn, setCurrentCheckIn] = useState(null); 
+  const [activeUsersAtLocation, setActiveUsersAtLocation] = useState([]);
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -50,16 +68,15 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // 2. Fetch Sent Pings (Missions) - Pending only
+          // 2. Fetch Gamification Data
           const { data: sentData } = await supabase
             .from('pings')
             .select(`*, receiver:profiles!receiver_id(*)`)
             .eq('from_user_id', user.id)
-            .eq('met_confirmed', null) // Only active missions
+            .eq('met_confirmed', null) 
             .order('created_at', { ascending: false });
           setActiveMissions(sentData || []);
 
-          // 3. Fetch Received Pings (Mysteries) - Pending only
           const { data: receivedData } = await supabase
             .from('pings')
             .select(`*, sender:profiles!sender_id(*)`)
@@ -67,15 +84,52 @@ const Home = () => {
             .eq('met_confirmed', null)
             .order('created_at', { ascending: false });
           setMysteryPings(receivedData || []);
+
+          // 🟢 NEW: Fetch Current Active Check-in
+          const { data: myCheckIn } = await supabase
+            .from('checkins')
+            .select(`
+                *,
+                locations (*)
+            `)
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle();
+            
+          setCurrentCheckIn(myCheckIn);
+
+          // 🟢 NEW: If checked in, fetch everyone else there
+          if (myCheckIn) {
+            const { data: people } = await supabase
+                .from('checkins')
+                .select(`
+                    user_id,
+                    profiles:user_id ( id, display_name, avatar_url, handle )
+                `)
+                .eq('location_id', myCheckIn.location_id)
+                .eq('is_active', true);
+            
+            // Filter out myself from the visual list (optional, but usually looks better)
+            setActiveUsersAtLocation(people?.filter(p => p.user_id !== user.id) || []);
+          }
         }
 
-        // 4. Fetch Locations
+        // 3. Fetch All Locations
         const { data: locData } = await supabase.from('locations').select('*');
         setLocations(locData || []);
       } catch (err) { console.error('Error:', err); } finally { setLoading(false); }
     };
     fetchData();
   }, [user]);
+
+  const handleCheckOut = async () => {
+    if (!currentCheckIn) return;
+    try {
+        await supabase.from('checkins').update({ is_active: false }).eq('id', currentCheckIn.id);
+        setCurrentCheckIn(null);
+        setActiveUsersAtLocation([]);
+    } catch (error) { console.error(error); }
+  };
 
   const sortedLocations = useMemo(() => {
     const mapped = locations.map(loc => {
@@ -106,8 +160,6 @@ const Home = () => {
               
               <div className="flex items-center gap-2 mt-1">
                  <p className="text-amber-500 text-xs font-medium">@{profile?.handle || "user"}</p>
-                 
-                 {/* 👇 THIS IS THE CLICKABLE BADGE YOU ASKED FOR 👇 */}
                  <span 
                    onClick={() => navigate('/achievements')} 
                    className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 flex items-center gap-1 cursor-pointer hover:bg-slate-700 transition"
@@ -115,8 +167,6 @@ const Home = () => {
                    <Trophy className="w-3 h-3 text-yellow-500" />
                    {profile?.xp || 0} XP
                  </span>
-                 {/* 👆 IT ACTS AS A BUTTON NOW 👆 */}
-
               </div>
             </div>
           </div>
@@ -125,17 +175,78 @@ const Home = () => {
         
         {/* GAME LAYER: Active Missions & Mysteries */}
         <div className="space-y-4">
-           {/* If I sent a ping, show Mission Card */}
            {activeMissions.map(ping => (
              <MissionCard key={ping.id} ping={ping} onComplete={() => window.location.reload()} />
            ))}
-
-           {/* If I received a ping, show Mystery Card */}
            {mysteryPings.map(ping => (
              <MysteryCard key={ping.id} ping={ping} />
            ))}
         </div>
       </div>
+
+      {/* 🟢 NEW: ACTIVE LOCATION CARD (The "Bump Down" Feature) */}
+      {currentCheckIn && (
+        <div className="px-4 mb-8">
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-amber-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+                
+                {/* Background Glow */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+
+                {/* Header */}
+                <div className="flex justify-between items-start mb-6 relative z-10">
+                    <div>
+                        <span className="flex items-center gap-1.5 text-green-400 text-xs font-bold uppercase tracking-wider mb-1">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            </span>
+                            You are here
+                        </span>
+                        <h2 className="text-2xl font-bold text-white leading-none">{currentCheckIn.locations.name}</h2>
+                    </div>
+                    <button 
+                        onClick={handleCheckOut}
+                        className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition"
+                    >
+                        <LogOut className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Users List (LARGE AVATARS) */}
+                {activeUsersAtLocation.length > 0 ? (
+                    <div>
+                        <p className="text-slate-400 text-xs font-bold uppercase mb-3">Who's Here</p>
+                        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                            {activeUsersAtLocation.map((person) => (
+                                <div 
+                                    key={person.user_id} 
+                                    onClick={() => navigate(`/user/${person.user_id}`)}
+                                    className="flex flex-col items-center gap-2 shrink-0 cursor-pointer group"
+                                >
+                                    <div className="w-20 h-20 rounded-full border-2 border-slate-700 group-hover:border-amber-500 transition p-0.5 relative">
+                                        <img 
+                                            src={person.profiles.avatar_url} 
+                                            className="w-full h-full object-cover rounded-full bg-slate-800"
+                                        />
+                                        <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-slate-900 rounded-full"></div>
+                                    </div>
+                                    <span className="text-xs font-medium text-slate-300 max-w-[80px] truncate text-center">
+                                        {person.profiles.display_name.split(' ')[0]}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-slate-500 text-sm italic bg-black/20 p-4 rounded-xl text-center border border-white/5">
+                        You're the first one here! 
+                        <br/>
+                        <span className="text-xs">Wait for others to join...</span>
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
 
       {/* List Header */}
       <div className="px-6 mb-2 flex items-center justify-between">
