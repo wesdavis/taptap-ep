@@ -33,7 +33,7 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
   
-  // 🟢 NEW: Active Check-in State
+  // Active Check-in State
   const [currentCheckIn, setCurrentCheckIn] = useState(null); 
   const [activeUsersAtLocation, setActiveUsersAtLocation] = useState([]);
 
@@ -54,37 +54,43 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // 2. Fetch Gamification Data
-          const { data: sentData } = await supabase
+          // 2. Fetch Gamification Data (Sent Pings)
+          const { data: sentData, error: sentError } = await supabase
             .from('pings')
             .select(`*, receiver:profiles!receiver_id(*)`)
             .eq('from_user_id', user.id)
-            .eq('met_confirmed', null) 
+            .is('met_confirmed', null) // <--- FIX 1: .is() instead of .eq()
             .order('created_at', { ascending: false });
+            
+          if (sentError) console.error("Sent Pings Error:", sentError);
           setActiveMissions(sentData || []);
 
-          const { data: receivedData } = await supabase
+          // 3. Fetch Gamification Data (Received Pings)
+          const { data: receivedData, error: recError } = await supabase
             .from('pings')
             .select(`*, sender:profiles!sender_id(*)`)
             .eq('to_user_id', user.id)
-            .eq('met_confirmed', null)
+            .is('met_confirmed', null) // <--- FIX 2: .is() instead of .eq()
             .order('created_at', { ascending: false });
+
+          if (recError) console.error("Received Pings Error:", recError);
           setMysteryPings(receivedData || []);
 
-          // 🟢 NEW: Fetch Current Active Check-in
-          const { data: myCheckIn } = await supabase
+          // 4. Fetch Current Active Check-in
+          const { data: myCheckIn, error: checkinError } = await supabase
             .from('checkins')
             .select(`
                 *,
-                locations (*)
+                locations (*) 
             `)
             .eq('user_id', user.id)
             .eq('is_active', true)
             .maybeSingle();
-            
+
+          if (checkinError) console.error("Checkin Error:", checkinError);  
           setCurrentCheckIn(myCheckIn);
 
-          // 🟢 NEW: If checked in, fetch everyone else there
+          // 5. If checked in, fetch everyone else there
           if (myCheckIn) {
             const { data: people } = await supabase
                 .from('checkins')
@@ -95,12 +101,12 @@ const Home = () => {
                 .eq('location_id', myCheckIn.location_id)
                 .eq('is_active', true);
             
-            // Filter out myself from the visual list (optional, but usually looks better)
+            // Filter out myself
             setActiveUsersAtLocation(people?.filter(p => p.user_id !== user.id) || []);
           }
         }
 
-        // 3. Fetch All Locations
+        // 6. Fetch All Locations
         const { data: locData } = await supabase.from('locations').select('*');
         setLocations(locData || []);
       } catch (err) { console.error('Error:', err); } finally { setLoading(false); }
@@ -170,7 +176,7 @@ const Home = () => {
         </div>
       </div>
 
-      {/* 🟢 NEW: ACTIVE LOCATION CARD (The "Bump Down" Feature) */}
+      {/* ACTIVE LOCATION CARD (The "Bump Down" Feature) */}
       {currentCheckIn && (
         <div className="px-4 mb-8">
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-amber-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
@@ -188,7 +194,10 @@ const Home = () => {
                             </span>
                             You are here
                         </span>
-                        <h2 className="text-2xl font-bold text-white leading-none">{currentCheckIn.locations.name}</h2>
+                        {/* SAFEGUARD: Only show name if locations data exists */}
+                        <h2 className="text-2xl font-bold text-white leading-none">
+                            {currentCheckIn.locations?.name || "Unknown Location"}
+                        </h2>
                     </div>
                     <button 
                         onClick={handleCheckOut}
@@ -211,13 +220,13 @@ const Home = () => {
                                 >
                                     <div className="w-20 h-20 rounded-full border-2 border-slate-700 group-hover:border-amber-500 transition p-0.5 relative">
                                         <img 
-                                            src={person.profiles.avatar_url} 
+                                            src={person.profiles?.avatar_url} 
                                             className="w-full h-full object-cover rounded-full bg-slate-800"
                                         />
                                         <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-slate-900 rounded-full"></div>
                                     </div>
                                     <span className="text-xs font-medium text-slate-300 max-w-[80px] truncate text-center">
-                                        {person.profiles.display_name.split(' ')[0]}
+                                        {person.profiles?.display_name?.split(' ')[0] || "User"}
                                     </span>
                                 </div>
                             ))}
