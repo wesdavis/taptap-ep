@@ -51,7 +51,7 @@ const AuthenticatedApp = () => {
         !user ? <Navigate to="/landing" replace /> : <LocationDetails />
       } />
 
-      <Route path="/user/:userid" element={
+      <Route path="/user/:userId" element={
         !user ? <Navigate to="/landing" replace /> : <PublicProfile />
       } />
 
