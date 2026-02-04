@@ -5,10 +5,10 @@ import { useAuth } from '../lib/AuthContext';
 import { Camera, User, Loader2, AtSign, Calendar, ArrowLeft, LogOut } from 'lucide-react';
 
 export default function ProfileSetup() {
-  // FIX 1: Use 'logout', not 'signOut' (Matches your AuthContext)
-  const { user, logout } = useAuth(); 
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false); // New state for image upload
   
   // Form State
   const [displayName, setDisplayName] = useState('');
@@ -42,6 +42,42 @@ export default function ProfileSetup() {
     };
     loadProfile();
   }, [user]);
+
+  // Handle Avatar Upload
+  const handleImageUpload = async (event) => {
+    try {
+      setUploading(true);
+
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error('You must select an image to upload.');
+      }
+
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // 1. Upload to Supabase Storage ('avatars' bucket)
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // 2. Get Public URL
+      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      
+      // 3. Set State (This will be saved to DB on form submit)
+      setAvatarUrl(data.publicUrl);
+
+    } catch (error) {
+      alert('Error uploading avatar: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,7 +114,6 @@ export default function ProfileSetup() {
   };
 
   const handleLogout = async () => {
-    // FIX 2: Call the correct logout function
     await logout(); 
     navigate('/auth');
   };
@@ -104,16 +139,41 @@ export default function ProfileSetup() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Avatar (Placeholder) */}
+          
+          {/* Avatar Upload */}
           <div className="flex justify-center">
             <div className="relative group cursor-pointer">
-              <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-amber-500 flex items-center justify-center overflow-hidden">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <User className="w-10 h-10 text-slate-500" />
-                )}
-              </div>
+              <label htmlFor="avatar-upload" className="cursor-pointer block relative">
+                <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-amber-500 flex items-center justify-center overflow-hidden">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-10 h-10 text-slate-500" />
+                  )}
+                  
+                  {/* Upload Spinner Overlay */}
+                  {uploading && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
+                      <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Hover Camera Icon */}
+                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <Camera className="w-6 h-6 text-white" />
+                </div>
+              </label>
+              
+              {/* Hidden File Input */}
+              <input 
+                type="file" 
+                id="avatar-upload"
+                accept="image/*"
+                onChange={handleImageUpload}
+                disabled={uploading}
+                className="hidden"
+              />
             </div>
           </div>
 
