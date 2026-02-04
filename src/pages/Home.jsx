@@ -1,17 +1,3 @@
-This is a fantastic idea. It turns the Home Screen into a "Live Mode" when you are out, instantly showing you who is around you without making you click into the location.
-
-I have updated Home.jsx to do exactly what you asked:
-
-Auto-Detects Check-in: It looks for your active check-in.
-
-"Live" Section: If you are checked in, it inserts a massive "You are here" card at the top.
-
-Big Avatars: It displays the people at your location with extra large profile pictures (larger than the details page).
-
-One-Tap Actions: Added a "Check Out" button right there for convenience.
-
-The Update: src/pages/Home.jsx
-JavaScript
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
