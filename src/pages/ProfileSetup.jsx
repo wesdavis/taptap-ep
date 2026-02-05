@@ -1,8 +1,3 @@
-Here is the complete, updated src/pages/ProfileSetup.jsx file.
-
-I have swapped out the old logic for the new "Universal Bucket" logic. You can copy-paste this entire block to replace what you currently have.
-
-JavaScript
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
