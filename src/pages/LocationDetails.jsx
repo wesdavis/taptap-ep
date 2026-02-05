@@ -108,10 +108,15 @@ const LocationDetails = () => {
   return (
     <div className="min-h-screen bg-slate-950 pb-20">
       
-      {/* 🟢 HERO IMAGE */}
+      {/* 🟢 HERO IMAGE (Smart Fallback) */}
       <div className="relative h-72 w-full">
         <img 
-            src={location.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800"} 
+            src={
+              // 1. Use the first Google Photo if we have it (High Quality)
+              (location.google_photos && location.google_photos.length > 0)
+                ? `https://places.googleapis.com/v1/${location.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=800&maxWidthPx=1200`
+                : (location.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800")
+            }
             alt={location.name} 
             className="w-full h-full object-cover" 
         />
