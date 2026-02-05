@@ -7,6 +7,9 @@ import MysteryCard from '../components/gamification/MysteryCard';
 import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
+// 🟢 ADDED: API KEY FOR PHOTOS
+const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
+
 // Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; 
@@ -100,8 +103,6 @@ const Home = () => {
   }, [user]);
 
   const handleCheckOut = async () => {
-    // If we're performing an auto-checkout, currentCheckIn might already be stale 
-    // or passed via closure, so we use the state currentCheckIn id.
     const checkinId = currentCheckIn?.id;
     if (!checkinId) return;
 
@@ -112,13 +113,12 @@ const Home = () => {
     } catch (error) { console.error(error); }
   };
 
-  // 🟢 NEW: Auto Check-out Logic
+  // Auto Check-out Logic
   useEffect(() => {
     if (currentCheckIn && userCoords && currentCheckIn.locations) {
       const loc = currentCheckIn.locations;
       const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
       
-      // Auto check-out if user is more than 1 mile away from the venue
       if (dist > 1.0) {
         console.log("Auto checking out due to distance...");
         handleCheckOut();
@@ -127,13 +127,10 @@ const Home = () => {
     }
   }, [userCoords, currentCheckIn]);
 
-  // 🟢 NEW: Handle Cancelling a Ping
   const handleCancelPing = async (pingId) => {
-    // 1. Remove from UI immediately (Optimistic update)
     setActiveMissions(prev => prev.filter(p => p.id !== pingId));
     setMysteryPings(prev => prev.filter(p => p.id !== pingId));
     
-    // 2. Remove from DB
     const { error } = await supabase.from('pings').delete().eq('id', pingId);
     if (error) {
         console.error(error);
@@ -150,7 +147,7 @@ const Home = () => {
     });
     return mapped.sort((a, b) => {
       if (sortBy === 'distance') return a._distance - b._distance;
-      if (sortBy === 'rating') return b.rating - a.rating; 
+      if (sortBy === 'rating') return (b.google_rating || b.rating || 0) - (a.google_rating || a.rating || 0); 
       return 0;
     });
   }, [locations, userCoords, sortBy]);
@@ -250,25 +247,43 @@ const Home = () => {
            <button onClick={() => setSortBy('rating')} className={`px-3 py-1 text-[10px] font-bold rounded-md transition ${sortBy === 'rating' ? 'bg-amber-500 text-black' : 'text-slate-400'}`}>Top</button>
         </div>
       </div>
+      
       <div className="px-4 space-y-3">
-        {sortedLocations.map((loc) => (
-          <div key={loc.id} onClick={() => navigate(`/location/${loc.id}`)} className="flex items-center justify-between bg-slate-900/50 border border-slate-800 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer">
-            <div className="flex-1 min-w-0 pr-4">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-white font-bold truncate text-base">{loc.name}</span>
-                {loc.rating && <div className="flex items-center gap-0.5 text-yellow-400 text-xs"><Star className="w-3 h-3 fill-yellow-400" /><span>{loc.rating}</span></div>}
+        {sortedLocations.map((loc) => {
+            
+          // 🟢 FIXED: SMART IMAGE LOGIC
+          const imageUrl = (loc.google_photos && loc.google_photos.length > 0)
+            ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`
+            : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");
+            
+          return (
+            <div key={loc.id} onClick={() => navigate(`/location/${loc.id}`)} className="flex items-center justify-between bg-slate-900/50 border border-slate-800 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer">
+              <div className="flex-1 min-w-0 pr-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-white font-bold truncate text-base">{loc.name}</span>
+                  <div className="flex items-center gap-0.5 text-yellow-400 text-xs">
+                     <Star className="w-3 h-3 fill-yellow-400" />
+                     {/* 🟢 FIXED: Prefer Google Rating */}
+                     <span>{loc.google_rating || loc.rating || 4.5}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
+                  <span className="px-2 py-0.5 bg-slate-800 rounded text-amber-500 uppercase font-bold text-[10px]">{loc.type}</span>
+                  {/* 🟢 FIXED: Show Price Level if available */}
+                  {loc.price_level && <span className="text-green-400">{loc.price_level}</span>}
+                  <span>•</span>
+                  <span>{loc._distance < 100 ? `${loc._distance.toFixed(1)} mi` : 'Far away'}</span>
+                </div>
+                <p className="text-slate-500 text-xs truncate">{loc.address}</p>
               </div>
-              <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
-                <span className="px-2 py-0.5 bg-slate-800 rounded text-amber-500 uppercase font-bold text-[10px]">{loc.type}</span>
-                <span>•</span>
-                <span>{loc._distance < 100 ? `${loc._distance.toFixed(1)} mi` : 'Far away'}</span>
+              <div className="relative w-16 h-16 shrink-0">
+                  {/* 🟢 FIXED: Using the Smart ImageUrl variable */}
+                  <img src={imageUrl} alt={loc.name} className="w-full h-full object-cover rounded-lg border border-slate-700" loading="lazy" />
               </div>
-              <p className="text-slate-500 text-xs truncate">{loc.address}</p>
+              <ChevronRight className="w-4 h-4 text-slate-600 ml-2" />
             </div>
-            <div className="relative w-16 h-16 shrink-0"><img src={loc.image_url} alt={loc.name} className="w-full h-full object-cover rounded-lg border border-slate-700" /></div>
-            <ChevronRight className="w-4 h-4 text-slate-600 ml-2" />
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
