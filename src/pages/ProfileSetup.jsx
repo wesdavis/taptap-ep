@@ -76,16 +76,16 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 NEW "UNIVERSAL BUCKET" ADMIN FUNCTION
+  // 🟢 CORRECTED ENRICHMENT FUNCTION
+  // Maps data to BOTH 'google_data' bucket AND specific columns
   const runEnrichment = async () => {
-    if (!confirm("Start Enrichment? This will dump raw Google Data into your database.")) return;
+    if (!confirm("Start Enrichment? This will populate your database columns.")) return;
     
     setEnriching(true);
     setStatusMsg("Starting...");
     setProgress(0);
 
     try {
-        // 1. Get all locations
         const { data: locs } = await supabase.from('locations').select('*');
         if (!locs || locs.length === 0) {
             toast.error("No locations found in database.");
@@ -97,11 +97,9 @@ export default function ProfileSetup() {
 
         for (const loc of locs) {
             try {
-                // ---------------------------------------------------------
-                // A. SEARCH (If we don't have an ID)
-                // ---------------------------------------------------------
                 let placeId = loc.google_place_id;
                 
+                // 1. SEARCH for ID if missing
                 if (!placeId) {
                     setStatusMsg(`🔎 Finding ID for: ${loc.name}`);
                     const search = await fetch('https://places.googleapis.com/v1/places:searchText', {
@@ -120,7 +118,7 @@ export default function ProfileSetup() {
                     
                     if (sData.places?.[0]) {
                         placeId = sData.places[0].id;
-                        // Save the ID immediately
+                        // Save ID immediately
                         await supabase.from('locations').update({ 
                             google_place_id: placeId,
                             address: sData.places[0].formattedAddress
@@ -128,52 +126,62 @@ export default function ProfileSetup() {
                     }
                 }
 
-                // ---------------------------------------------------------
-                // B. FETCH DETAILS & DUMP TO 'google_data'
-                // ---------------------------------------------------------
+                // 2. FETCH DETAILS & SAVE TO COLUMNS
                 if (placeId) {
-                    setStatusMsg(`📥 Dumping data for: ${loc.name}`);
+                    setStatusMsg(`📥 Saving data for: ${loc.name}`);
                     
                     const details = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
                         headers: {
                             'Content-Type': 'application/json',
                             'X-Goog-Api-Key': GOOGLE_KEY,
-                            // Request EVERYTHING relevant
                             'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary,formattedAddress'
                         }
                     });
 
                     const dData = await details.json();
 
-                    if (dData.error) {
-                        console.error("Google API Error:", dData.error);
-                        throw new Error(dData.error.message);
+                    if (dData.error) throw new Error(dData.error.message);
+
+                    // Map Price Level (PRICE_LEVEL_MODERATE -> $$)
+                    const priceMap = { 
+                        'PRICE_LEVEL_INEXPENSIVE': '$', 
+                        'PRICE_LEVEL_MODERATE': '$$', 
+                        'PRICE_LEVEL_EXPENSIVE': '$$$', 
+                        'PRICE_LEVEL_VERY_EXPENSIVE': '$$$$' 
+                    };
+
+                    // Format Hours (Array -> String)
+                    let hoursString = null;
+                    if (dData.regularOpeningHours?.weekdayDescriptions) {
+                        hoursString = dData.regularOpeningHours.weekdayDescriptions.join('\n');
                     }
 
-                    // 🟢 THE MAGIC: Save the whole object to 'google_data'
-                    const { error: dbError } = await supabase.from('locations').update({
-                        google_data: dData,  // <--- Dump it all here (Requires 'google_data' column type JSONB)
+                    // 🟢 THE FIX: Explicitly update the columns you created
+                    const updates = {
+                        google_data: dData,  // Bucket
                         
-                        // We also update these standard columns for convenience
+                        // Explicit Columns
+                        google_rating: dData.rating || null,
+                        google_user_ratings_total: dData.userRatingCount || 0,
+                        price_level: priceMap[dData.priceLevel] || '$$', // Saves '$' instead of 'PRICE_LEVEL_...'
+                        hours: hoursString,
                         phone: dData.nationalPhoneNumber,
                         website: dData.websiteUri,
                         description: dData.editorialSummary?.text || loc.description
-                    }).eq('id', loc.id);
+                    };
+
+                    const { error: dbError } = await supabase.from('locations').update(updates).eq('id', loc.id);
 
                     if (dbError) throw dbError;
                     count++;
                 }
 
-                // Update Progress Bar
                 setProgress(Math.round(((count + 1) / locs.length) * 100));
-                
-                // Rate limit pause (very important for Google API)
                 await new Promise(r => setTimeout(r, 200));
 
             } catch (err) {
                 console.error(`❌ Error on ${loc.name}:`, err);
-                // Don't crash the whole loop, just log it
-                setStatusMsg(`Error on ${loc.name}: ${err.message}`);
+                setStatusMsg(`Error on ${loc.name}`);
             }
         }
         
