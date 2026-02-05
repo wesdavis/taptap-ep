@@ -1,9 +1,3 @@
-Here is the complete, updated code for src/pages/Home.jsx.
-
-I have integrated the Auto Check-out logic (which monitors your distance from the venue) and added the UI polish (pulsing map icon and "Live Mode" text) as discussed.
-
-src/pages/Home.jsx
-JavaScript
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
