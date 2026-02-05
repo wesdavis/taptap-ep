@@ -50,14 +50,40 @@ const LocationDetails = () => {
   }, [id, user]);
 
   const handleCheckIn = async () => {
-    if (!user) return navigate('/auth');
-    if (checkedIn) return; // Prevent double check-in
+  if (!user) return navigate('/auth');
+  if (checkedIn) return;
+
+  setLoading(true);
+
+  if (!("geolocation" in navigator)) {
+    alert("Geolocation is not supported by your browser.");
+    setLoading(false);
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    const userLat = position.coords.latitude;
+    const userLng = position.coords.longitude;
+
+    // Haversine formula to calculate distance from venue
+    const R = 6371; // Radius of earth in km
+    const dLat = (location.latitude - userLat) * Math.PI / 180;
+    const dLon = (location.longitude - userLng) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(userLat * Math.PI / 180) * Math.cos(location.latitude * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c;
+
+    // Block check-in if distance > 0.5km (approx 0.3 miles)
+    if (distance > 0.5) {
+      alert(`Too far! You are ${distance.toFixed(2)}km away. Please be at the venue to check in.`);
+      setLoading(false);
+      return;
+    }
 
     try {
-      // 1. Check out of everywhere else first
+      // Clear old check-ins and insert new one
       await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
-
-      // 2. Check in here
       const { error } = await supabase.from('checkins').insert({
         user_id: user.id,
         location_id: id,
@@ -69,12 +95,17 @@ const LocationDetails = () => {
       setCheckedIn(true);
       setActiveCount(prev => prev + 1);
       setGridRefreshKey(prev => prev + 1);
-
     } catch (error) {
-      console.error("Check-in failed:", error);
-      alert("Could not check in.");
+      console.error(error);
+      alert("Check-in failed.");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, (err) => {
+    alert("Please enable location services to check in.");
+    setLoading(false);
+  });
+};
 
   const handleCheckOut = async () => {
     if (!user) return;

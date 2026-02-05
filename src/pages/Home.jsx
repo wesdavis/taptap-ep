@@ -1,3 +1,9 @@
+Here is the complete, updated code for src/pages/Home.jsx.
+
+I have integrated the Auto Check-out logic (which monitors your distance from the venue) and added the UI polish (pulsing map icon and "Live Mode" text) as discussed.
+
+src/pages/Home.jsx
+JavaScript
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -5,7 +11,7 @@ import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
 import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut } from 'lucide-react';
-import { toast } from 'sonner'; // Ensure you have this installed, or use standard alert
+import { toast } from 'sonner';
 
 // Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -100,13 +106,32 @@ const Home = () => {
   }, [user]);
 
   const handleCheckOut = async () => {
-    if (!currentCheckIn) return;
+    // If we're performing an auto-checkout, currentCheckIn might already be stale 
+    // or passed via closure, so we use the state currentCheckIn id.
+    const checkinId = currentCheckIn?.id;
+    if (!checkinId) return;
+
     try {
-        await supabase.from('checkins').update({ is_active: false }).eq('id', currentCheckIn.id);
+        await supabase.from('checkins').update({ is_active: false }).eq('id', checkinId);
         setCurrentCheckIn(null);
         setActiveUsersAtLocation([]);
     } catch (error) { console.error(error); }
   };
+
+  // 🟢 NEW: Auto Check-out Logic
+  useEffect(() => {
+    if (currentCheckIn && userCoords && currentCheckIn.locations) {
+      const loc = currentCheckIn.locations;
+      const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
+      
+      // Auto check-out if user is more than 1 mile away from the venue
+      if (dist > 1.0) {
+        console.log("Auto checking out due to distance...");
+        handleCheckOut();
+        toast.info(`You have been checked out of ${loc.name} because you left the area.`);
+      }
+    }
+  }, [userCoords, currentCheckIn]);
 
   // 🟢 NEW: Handle Cancelling a Ping
   const handleCancelPing = async (pingId) => {
@@ -180,7 +205,7 @@ const Home = () => {
         </div>
       </div>
 
-      {/* ACTIVE LOCATION CARD */}
+      {/* ACTIVE LOCATION CARD (Live Mode) */}
       {currentCheckIn && (
         <div className="px-4 mb-8">
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-amber-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
@@ -188,10 +213,16 @@ const Home = () => {
                 <div className="flex justify-between items-start mb-6 relative z-10">
                     <div>
                         <span className="flex items-center gap-1.5 text-green-400 text-xs font-bold uppercase tracking-wider mb-1">
-                            <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>
-                            You are here
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            </span>
+                            Live Mode Active
                         </span>
-                        <h2 className="text-2xl font-bold text-white leading-none">{currentCheckIn.locations?.name || "Unknown Location"}</h2>
+                        <h2 className="text-2xl font-bold text-white leading-none">
+                          <MapPin className="inline-block w-5 h-5 mr-1 text-amber-500 animate-pulse" /> 
+                          {currentCheckIn.locations?.name || "Unknown Location"}
+                        </h2>
                     </div>
                     <button onClick={handleCheckOut} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition"><LogOut className="w-5 h-5" /></button>
                 </div>
@@ -248,4 +279,5 @@ const Home = () => {
     </div>
   );
 };
+
 export default Home;
