@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Camera, ArrowLeft, Zap } from 'lucide-react';
+import { Loader2, Camera, ArrowLeft, Zap, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 YOUR API KEY
@@ -76,19 +76,18 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 CORRECTED ENRICHMENT FUNCTION
-  // Maps data to BOTH 'google_data' bucket AND specific columns
+  // 🟢 1. DATA ENRICHMENT (Ratings, Hours, Price)
   const runEnrichment = async () => {
     if (!confirm("Start Enrichment? This will populate your database columns.")) return;
     
     setEnriching(true);
-    setStatusMsg("Starting...");
+    setStatusMsg("Starting Data Fetch...");
     setProgress(0);
 
     try {
         const { data: locs } = await supabase.from('locations').select('*');
         if (!locs || locs.length === 0) {
-            toast.error("No locations found in database.");
+            toast.error("No locations found.");
             setEnriching(false);
             return;
         }
@@ -99,7 +98,7 @@ export default function ProfileSetup() {
             try {
                 let placeId = loc.google_place_id;
                 
-                // 1. SEARCH for ID if missing
+                // Search for ID if missing
                 if (!placeId) {
                     setStatusMsg(`🔎 Finding ID for: ${loc.name}`);
                     const search = await fetch('https://places.googleapis.com/v1/places:searchText', {
@@ -118,7 +117,6 @@ export default function ProfileSetup() {
                     
                     if (sData.places?.[0]) {
                         placeId = sData.places[0].id;
-                        // Save ID immediately
                         await supabase.from('locations').update({ 
                             google_place_id: placeId,
                             address: sData.places[0].formattedAddress
@@ -126,7 +124,6 @@ export default function ProfileSetup() {
                     }
                 }
 
-                // 2. FETCH DETAILS & SAVE TO COLUMNS
                 if (placeId) {
                     setStatusMsg(`📥 Saving data for: ${loc.name}`);
                     
@@ -142,7 +139,6 @@ export default function ProfileSetup() {
 
                     if (dData.error) throw new Error(dData.error.message);
 
-                    // Map Price Level (PRICE_LEVEL_MODERATE -> $$)
                     const priceMap = { 
                         'PRICE_LEVEL_INEXPENSIVE': '$', 
                         'PRICE_LEVEL_MODERATE': '$$', 
@@ -150,20 +146,16 @@ export default function ProfileSetup() {
                         'PRICE_LEVEL_VERY_EXPENSIVE': '$$$$' 
                     };
 
-                    // Format Hours (Array -> String)
                     let hoursString = null;
                     if (dData.regularOpeningHours?.weekdayDescriptions) {
                         hoursString = dData.regularOpeningHours.weekdayDescriptions.join('\n');
                     }
 
-                    // 🟢 THE FIX: Explicitly update the columns you created
                     const updates = {
-                        google_data: dData,  // Bucket
-                        
-                        // Explicit Columns
+                        google_data: dData,
                         google_rating: dData.rating || null,
                         google_user_ratings_total: dData.userRatingCount || 0,
-                        price_level: priceMap[dData.priceLevel] || '$$', // Saves '$' instead of 'PRICE_LEVEL_...'
+                        price_level: priceMap[dData.priceLevel] || '$$',
                         hours: hoursString,
                         phone: dData.nationalPhoneNumber,
                         website: dData.websiteUri,
@@ -171,7 +163,6 @@ export default function ProfileSetup() {
                     };
 
                     const { error: dbError } = await supabase.from('locations').update(updates).eq('id', loc.id);
-
                     if (dbError) throw dbError;
                     count++;
                 }
@@ -185,12 +176,68 @@ export default function ProfileSetup() {
             }
         }
         
-        setStatusMsg("Done!");
-        toast.success(`Enrichment Complete! Updated ${count} locations.`);
+        setStatusMsg("Data Enrichment Done!");
+        toast.success(`Updated ${count} locations.`);
 
     } catch (err) {
-        toast.error("Critical Failure: " + err.message);
+        toast.error("Failure: " + err.message);
         setStatusMsg("Failed.");
+    } finally {
+        setEnriching(false);
+    }
+  };
+
+  // 🟢 2. PHOTO FETCH (New!)
+  const runPhotoFetch = async () => {
+    if (!confirm("Fetch Photos? This will download image references for all locations.")) return;
+    
+    setEnriching(true);
+    setStatusMsg("Starting Photo Fetch...");
+    setProgress(0);
+
+    try {
+        const { data: locs } = await supabase.from('locations').select('id, name, google_place_id');
+        let count = 0;
+
+        for (const loc of locs) {
+            if (!loc.google_place_id) continue;
+
+            try {
+                setStatusMsg(`📸 Getting photos for: ${loc.name}`);
+                
+                const res = await fetch(`https://places.googleapis.com/v1/places/${loc.google_place_id}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': GOOGLE_KEY,
+                        'X-Goog-FieldMask': 'photos'
+                    }
+                });
+                
+                const data = await res.json();
+                
+                if (data.photos && data.photos.length > 0) {
+                    // Get top 10 photo references
+                    const photoRefs = data.photos.map(p => p.name).slice(0, 10);
+                    
+                    await supabase.from('locations').update({ 
+                        google_photos: photoRefs 
+                    }).eq('id', loc.id);
+                    
+                    count++;
+                }
+
+                setProgress(Math.round(((count + 1) / locs.length) * 100));
+                await new Promise(r => setTimeout(r, 200));
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        setStatusMsg("Photos Done!");
+        toast.success(`Saved photos for ${count} locations.`);
+
+    } catch (err) {
+        toast.error("Photo fetch failed");
     } finally {
         setEnriching(false);
     }
@@ -212,7 +259,6 @@ export default function ProfileSetup() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-            
             <div className="flex justify-center mb-6">
                 <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center relative overflow-hidden group cursor-pointer">
                     {formData.avatar_url ? (
@@ -225,49 +271,17 @@ export default function ProfileSetup() {
 
             <div className="space-y-2">
                 <Label>Display Name</Label>
-                <Input 
-                    required 
-                    value={formData.full_name} 
-                    onChange={e => setFormData({...formData, full_name: e.target.value})} 
-                    className="bg-slate-900 border-slate-800" 
-                />
+                <Input required value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="bg-slate-900 border-slate-800" />
             </div>
 
             <div className="space-y-2">
-                <Label>Handle (@username)</Label>
-                <Input 
-                    required 
-                    value={formData.handle} 
-                    onChange={e => setFormData({...formData, handle: e.target.value.toLowerCase().replace(/\s/g, '')})} 
-                    className="bg-slate-900 border-slate-800" 
-                />
-            </div>
-
-            <div className="space-y-2">
-                <Label>Gender</Label>
-                <Select 
-                    value={formData.gender} 
-                    onValueChange={val => setFormData({...formData, gender: val})}
-                >
-                    <SelectTrigger className="bg-slate-900 border-slate-800">
-                        <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                        <SelectItem value="Non-binary">Non-binary</SelectItem>
-                    </SelectContent>
-                </Select>
+                <Label>Handle</Label>
+                <Input required value={formData.handle} onChange={e => setFormData({...formData, handle: e.target.value})} className="bg-slate-900 border-slate-800" />
             </div>
 
             <div className="space-y-2">
                 <Label>Bio</Label>
-                <Textarea 
-                    value={formData.bio} 
-                    onChange={e => setFormData({...formData, bio: e.target.value})} 
-                    className="bg-slate-900 border-slate-800" 
-                    placeholder="Tell us about yourself..."
-                />
+                <Textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="bg-slate-900 border-slate-800" />
             </div>
 
             <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">
@@ -276,26 +290,37 @@ export default function ProfileSetup() {
         </form>
 
         {/* 🟢 ADMIN ZONE */}
-        <div className="mt-12 pt-8 border-t border-slate-800/50">
-            <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 text-center">Admin Controls</h3>
+        <div className="mt-12 pt-8 border-t border-slate-800/50 space-y-3">
+            <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2 text-center">Admin Controls</h3>
             
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3">
+                
+                {/* Button 1: Data */}
                 <Button 
                     variant="outline" 
                     onClick={runEnrichment}
                     disabled={enriching}
-                    className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 transition-all"
+                    className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10"
                 >
                     {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-                    {enriching ? "Running..." : "Run Database Enrichment"}
+                    {enriching ? "Working..." : "1. Fetch Data (Ratings/Price)"}
+                </Button>
+
+                {/* Button 2: Photos */}
+                <Button 
+                    variant="outline" 
+                    onClick={runPhotoFetch}
+                    disabled={enriching}
+                    className="w-full border-pink-500/30 text-pink-400 hover:bg-pink-500/10"
+                >
+                    {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ImageIcon className="w-4 h-4 mr-2" />}
+                    {enriching ? "Working..." : "2. Fetch Photos"}
                 </Button>
                 
-                {/* 🟢 LIVE STATUS LOG */}
+                {/* Status Log */}
                 {statusMsg && (
                     <div className="mt-3 text-center">
-                        <p className="text-[10px] font-mono text-slate-400 animate-pulse mb-1">
-                            {statusMsg}
-                        </p>
+                        <p className="text-[10px] font-mono text-slate-400 animate-pulse mb-1">{statusMsg}</p>
                         {enriching && (
                             <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                                 <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
