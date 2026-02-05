@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Camera, ArrowLeft, Zap } from 'lucide-react';
+import { Loader2, Camera, ArrowLeft, Zap, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 YOUR API KEY
@@ -19,7 +19,11 @@ export default function ProfileSetup() {
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Admin State
   const [enriching, setEnriching] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
+  const [progress, setProgress] = useState(0);
   
   const [formData, setFormData] = useState({
     full_name: '',
@@ -36,7 +40,7 @@ export default function ProfileSetup() {
   async function loadProfile() {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      if (error && error.code !== 'PGRST116') throw error; // Ignore "not found" error for new users
+      if (error && error.code !== 'PGRST116') throw error; 
       if (data) {
         setFormData({
             full_name: data.full_name || '',
@@ -64,7 +68,7 @@ export default function ProfileSetup() {
         });
         if (error) throw error;
         toast.success("Profile updated!");
-        navigate('/'); // Go back home after save
+        navigate('/'); 
     } catch (error) {
         toast.error("Error updating profile");
     } finally {
@@ -72,62 +76,111 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 ADMIN FUNCTION: Enrich All Locations
+  // 🟢 SUPER ENRICHMENT FUNCTION (Finds ID + Gets Details)
   const runEnrichment = async () => {
-    if (!confirm("Admin Action: Fetch live data from Google for ALL locations?")) return;
+    if (!confirm("Admin: This will find IDs and fetch data for ALL locations. Continue?")) return;
+    
     setEnriching(true);
-    toast.info("Starting enrichment... please wait.");
+    setStatusMsg("Starting...");
+    setProgress(0);
 
     try {
-        // 1. Get locations with a Google Place ID
-        const { data: locs } = await supabase
-            .from('locations')
-            .select('id, name, google_place_id')
-            .not('google_place_id', 'is', null);
-
+        // 1. Get ALL locations (even ones without IDs)
+        const { data: locs } = await supabase.from('locations').select('*');
+        const total = locs.length;
         let count = 0;
-        
-        // 2. Loop and Update
-        for (const loc of locs || []) {
+
+        for (const loc of locs) {
             try {
-                const res = await fetch(`https://places.googleapis.com/v1/places/${loc.google_place_id}`, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Goog-Api-Key': GOOGLE_KEY,
-                        'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary'
+                let placeId = loc.google_place_id;
+                let didUpdate = false;
+
+                // ---------------------------------------------------------
+                // STEP 1: FIND MISSING ID
+                // ---------------------------------------------------------
+                if (!placeId) {
+                    setStatusMsg(`🔎 Finding ID for: ${loc.name}...`);
+                    const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Goog-Api-Key': GOOGLE_KEY,
+                            'X-Goog-FieldMask': 'places.id,places.formattedAddress'
+                        },
+                        body: JSON.stringify({ 
+                            textQuery: `${loc.name} ${loc.address || 'El Paso, TX'}`,
+                            maxResultCount: 1 
+                        })
+                    });
+                    const searchJson = await searchRes.json();
+                    if (searchJson.places?.[0]?.id) {
+                        placeId = searchJson.places[0].id;
+                        // Save ID immediately
+                        await supabase.from('locations').update({ 
+                            google_place_id: placeId,
+                            address: searchJson.places[0].formattedAddress // Auto-fix address too
+                        }).eq('id', loc.id);
+                        didUpdate = true;
+                    } else {
+                        setStatusMsg(`⚠️ Not found: ${loc.name}`);
+                        continue; // Skip details if we can't find the place
                     }
-                });
-
-                const data = await res.json();
-                const updates = {};
-
-                if (data.rating) updates.google_rating = data.rating;
-                if (data.userRatingCount) updates.google_user_ratings_total = data.userRatingCount;
-                if (data.nationalPhoneNumber) updates.phone = data.nationalPhoneNumber;
-                if (data.websiteUri) updates.website = data.websiteUri;
-                if (data.editorialSummary?.text) updates.description = data.editorialSummary.text;
-                
-                // Helper for Price
-                const priceMap = { 'PRICE_LEVEL_INEXPENSIVE': '$', 'PRICE_LEVEL_MODERATE': '$$', 'PRICE_LEVEL_EXPENSIVE': '$$$' };
-                if (data.priceLevel) updates.price_level = priceMap[data.priceLevel] || '$$';
-
-                // Helper for Hours
-                if (data.regularOpeningHours?.weekdayDescriptions) {
-                    updates.hours = data.regularOpeningHours.weekdayDescriptions.join('\n');
                 }
 
-                if (Object.keys(updates).length > 0) {
-                    await supabase.from('locations').update(updates).eq('id', loc.id);
-                    count++;
+                // ---------------------------------------------------------
+                // STEP 2: FETCH RICH DETAILS
+                // ---------------------------------------------------------
+                if (placeId) {
+                    setStatusMsg(`📥 Downloading data for: ${loc.name}...`);
+                    
+                    const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Goog-Api-Key': GOOGLE_KEY,
+                            'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary'
+                        }
+                    });
+
+                    const data = await detailsRes.json();
+                    const updates = {};
+
+                    if (data.rating) updates.google_rating = data.rating;
+                    if (data.userRatingCount) updates.google_user_ratings_total = data.userRatingCount;
+                    if (data.nationalPhoneNumber) updates.phone = data.nationalPhoneNumber;
+                    if (data.websiteUri) updates.website = data.websiteUri;
+                    if (data.editorialSummary?.text) updates.description = data.editorialSummary.text;
+
+                    const priceMap = { 'PRICE_LEVEL_INEXPENSIVE': '$', 'PRICE_LEVEL_MODERATE': '$$', 'PRICE_LEVEL_EXPENSIVE': '$$$', 'PRICE_LEVEL_VERY_EXPENSIVE': '$$$$' };
+                    if (data.priceLevel) updates.price_level = priceMap[data.priceLevel] || '$$';
+
+                    if (data.regularOpeningHours?.weekdayDescriptions) {
+                        updates.hours = data.regularOpeningHours.weekdayDescriptions.join('\n');
+                    }
+
+                    if (Object.keys(updates).length > 0) {
+                        await supabase.from('locations').update(updates).eq('id', loc.id);
+                        didUpdate = true;
+                    }
                 }
-                // Rate limit pause
+
+                if (didUpdate) count++;
+                setProgress(Math.round(((count) / total) * 100));
+
+                // Small pause to be nice to API
                 await new Promise(r => setTimeout(r, 200));
 
-            } catch (err) { console.error(err); }
+            } catch (err) {
+                console.error(`Error on ${loc.name}`, err);
+            }
         }
-        toast.success(`Updated ${count} locations!`);
+        
+        setStatusMsg("Done!");
+        toast.success(`Successfully updated ${count} locations!`);
+
     } catch (err) {
+        console.error(err);
         toast.error("Enrichment failed.");
+        setStatusMsg("Error.");
     } finally {
         setEnriching(false);
     }
@@ -136,7 +189,7 @@ export default function ProfileSetup() {
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-6">
+    <div className="min-h-screen bg-slate-950 text-white p-6 pb-32">
       <div className="max-w-md mx-auto">
         
         {/* Header */}
@@ -157,7 +210,6 @@ export default function ProfileSetup() {
                     ) : (
                         <Camera className="w-8 h-8 text-slate-500" />
                     )}
-                    {/* Note: Real image upload requires Storage setup. For now, text URL is fine. */}
                 </div>
             </div>
 
@@ -213,21 +265,35 @@ export default function ProfileSetup() {
             </Button>
         </form>
 
-        {/* 🟢 ADMIN SECTION (Hidden at bottom) */}
-        <div className="mt-12 pt-12 border-t border-slate-800/50">
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Admin Zone</h3>
-            <Button 
-                variant="outline" 
-                onClick={runEnrichment}
-                disabled={enriching}
-                className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10"
-            >
-                {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-                {enriching ? "Enriching Database..." : "Enrich All Locations"}
-            </Button>
-            <p className="text-[10px] text-slate-600 mt-2 text-center">
-                Fetches Ratings, Prices, and Hours from Google for all venues.
-            </p>
+        {/* 🟢 ADMIN ZONE */}
+        <div className="mt-12 pt-8 border-t border-slate-800/50">
+            <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4 text-center">Admin Controls</h3>
+            
+            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+                <Button 
+                    variant="outline" 
+                    onClick={runEnrichment}
+                    disabled={enriching}
+                    className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 transition-all"
+                >
+                    {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+                    {enriching ? "Running..." : "Run Database Enrichment"}
+                </Button>
+                
+                {/* 🟢 LIVE STATUS LOG */}
+                {statusMsg && (
+                    <div className="mt-3 text-center">
+                        <p className="text-[10px] font-mono text-slate-400 animate-pulse mb-1">
+                            {statusMsg}
+                        </p>
+                        {enriching && (
+                            <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
 
       </div>
