@@ -1,3 +1,8 @@
+Here is the complete, updated src/pages/ProfileSetup.jsx file.
+
+I have swapped out the old logic for the new "Universal Bucket" logic. You can copy-paste this entire block to replace what you currently have.
+
+JavaScript
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Camera, ArrowLeft, Zap, CheckCircle2 } from 'lucide-react';
+import { Loader2, Camera, ArrowLeft, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 YOUR API KEY
@@ -76,31 +81,35 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 SUPER ENRICHMENT FUNCTION (Finds ID + Gets Details)
+  // 🟢 NEW "UNIVERSAL BUCKET" ADMIN FUNCTION
   const runEnrichment = async () => {
-    if (!confirm("Admin: This will find IDs and fetch data for ALL locations. Continue?")) return;
+    if (!confirm("Start Enrichment? This will dump raw Google Data into your database.")) return;
     
     setEnriching(true);
     setStatusMsg("Starting...");
     setProgress(0);
 
     try {
-        // 1. Get ALL locations (even ones without IDs)
+        // 1. Get all locations
         const { data: locs } = await supabase.from('locations').select('*');
-        const total = locs.length;
+        if (!locs || locs.length === 0) {
+            toast.error("No locations found in database.");
+            setEnriching(false);
+            return;
+        }
+
         let count = 0;
 
         for (const loc of locs) {
             try {
+                // ---------------------------------------------------------
+                // A. SEARCH (If we don't have an ID)
+                // ---------------------------------------------------------
                 let placeId = loc.google_place_id;
-                let didUpdate = false;
-
-                // ---------------------------------------------------------
-                // STEP 1: FIND MISSING ID
-                // ---------------------------------------------------------
+                
                 if (!placeId) {
-                    setStatusMsg(`🔎 Finding ID for: ${loc.name}...`);
-                    const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+                    setStatusMsg(`🔎 Finding ID for: ${loc.name}`);
+                    const search = await fetch('https://places.googleapis.com/v1/places:searchText', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -108,79 +117,77 @@ export default function ProfileSetup() {
                             'X-Goog-FieldMask': 'places.id,places.formattedAddress'
                         },
                         body: JSON.stringify({ 
-                            textQuery: `${loc.name} ${loc.address || 'El Paso, TX'}`,
-                            maxResultCount: 1 
+                            textQuery: `${loc.name} ${loc.address || 'El Paso, TX'}` 
                         })
                     });
-                    const searchJson = await searchRes.json();
-                    if (searchJson.places?.[0]?.id) {
-                        placeId = searchJson.places[0].id;
-                        // Save ID immediately
+                    
+                    const sData = await search.json();
+                    
+                    if (sData.places?.[0]) {
+                        placeId = sData.places[0].id;
+                        // Save the ID immediately
                         await supabase.from('locations').update({ 
                             google_place_id: placeId,
-                            address: searchJson.places[0].formattedAddress // Auto-fix address too
+                            address: sData.places[0].formattedAddress
                         }).eq('id', loc.id);
-                        didUpdate = true;
-                    } else {
-                        setStatusMsg(`⚠️ Not found: ${loc.name}`);
-                        continue; // Skip details if we can't find the place
                     }
                 }
 
                 // ---------------------------------------------------------
-                // STEP 2: FETCH RICH DETAILS
+                // B. FETCH DETAILS & DUMP TO 'google_data'
                 // ---------------------------------------------------------
                 if (placeId) {
-                    setStatusMsg(`📥 Downloading data for: ${loc.name}...`);
+                    setStatusMsg(`📥 Dumping data for: ${loc.name}`);
                     
-                    const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+                    const details = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
                         headers: {
                             'Content-Type': 'application/json',
                             'X-Goog-Api-Key': GOOGLE_KEY,
-                            'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary'
+                            // Request EVERYTHING relevant
+                            'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary,formattedAddress'
                         }
                     });
 
-                    const data = await detailsRes.json();
-                    const updates = {};
+                    const dData = await details.json();
 
-                    if (data.rating) updates.google_rating = data.rating;
-                    if (data.userRatingCount) updates.google_user_ratings_total = data.userRatingCount;
-                    if (data.nationalPhoneNumber) updates.phone = data.nationalPhoneNumber;
-                    if (data.websiteUri) updates.website = data.websiteUri;
-                    if (data.editorialSummary?.text) updates.description = data.editorialSummary.text;
-
-                    const priceMap = { 'PRICE_LEVEL_INEXPENSIVE': '$', 'PRICE_LEVEL_MODERATE': '$$', 'PRICE_LEVEL_EXPENSIVE': '$$$', 'PRICE_LEVEL_VERY_EXPENSIVE': '$$$$' };
-                    if (data.priceLevel) updates.price_level = priceMap[data.priceLevel] || '$$';
-
-                    if (data.regularOpeningHours?.weekdayDescriptions) {
-                        updates.hours = data.regularOpeningHours.weekdayDescriptions.join('\n');
+                    if (dData.error) {
+                        console.error("Google API Error:", dData.error);
+                        throw new Error(dData.error.message);
                     }
 
-                    if (Object.keys(updates).length > 0) {
-                        await supabase.from('locations').update(updates).eq('id', loc.id);
-                        didUpdate = true;
-                    }
+                    // 🟢 THE MAGIC: Save the whole object to 'google_data'
+                    const { error: dbError } = await supabase.from('locations').update({
+                        google_data: dData,  // <--- Dump it all here (Requires 'google_data' column type JSONB)
+                        
+                        // We also update these standard columns for convenience
+                        phone: dData.nationalPhoneNumber,
+                        website: dData.websiteUri,
+                        description: dData.editorialSummary?.text || loc.description
+                    }).eq('id', loc.id);
+
+                    if (dbError) throw dbError;
+                    count++;
                 }
 
-                if (didUpdate) count++;
-                setProgress(Math.round(((count) / total) * 100));
-
-                // Small pause to be nice to API
+                // Update Progress Bar
+                setProgress(Math.round(((count + 1) / locs.length) * 100));
+                
+                // Rate limit pause (very important for Google API)
                 await new Promise(r => setTimeout(r, 200));
 
             } catch (err) {
-                console.error(`Error on ${loc.name}`, err);
+                console.error(`❌ Error on ${loc.name}:`, err);
+                // Don't crash the whole loop, just log it
+                setStatusMsg(`Error on ${loc.name}: ${err.message}`);
             }
         }
         
         setStatusMsg("Done!");
-        toast.success(`Successfully updated ${count} locations!`);
+        toast.success(`Enrichment Complete! Updated ${count} locations.`);
 
     } catch (err) {
-        console.error(err);
-        toast.error("Enrichment failed.");
-        setStatusMsg("Error.");
+        toast.error("Critical Failure: " + err.message);
+        setStatusMsg("Failed.");
     } finally {
         setEnriching(false);
     }

@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, User as UserIcon, Navigation, Globe, Phone } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, User as UserIcon, Navigation, Globe } from 'lucide-react';
 import UserGrid from '../components/location/UserGrid'; 
 import { toast } from 'sonner';
 
-// 🟢 ADD YOUR KEY HERE
+// Keep the key for the Mini-Map Iframe (it's free/cheap)
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
 const LocationDetails = () => {
@@ -21,32 +21,24 @@ const LocationDetails = () => {
   const [checkingLocation, setCheckingLocation] = useState(false);
   const [gridRefreshKey, setGridRefreshKey] = useState(0);
   
-  // State for live Google Data
-  const [liveDetails, setLiveDetails] = useState({
-    address: '',
-    hours: '',
-    isOpen: null,
-    phone: '',
-    website: ''
-  });
+  // 1. We deleted the 'liveDetails' state and the Google Fetch useEffect.
+  //    Now we just rely on the 'location' variable from Supabase.
 
   useEffect(() => {
     const fetchLocationData = async () => {
       try {
         setLoading(true);
-        // Fetch Location from Supabase
+        // This selects ALL columns, including the new 'google_data', 'hours', 'phone', etc.
         const { data: locData, error } = await supabase.from('locations').select('*').eq('id', id).single();
         if (error) throw error;
         setLocation(locData);
 
-        // Fetch active check-ins count
         const { count } = await supabase.from('checkins')
           .select('*', { count: 'exact', head: true })
           .eq('location_id', id)
           .eq('is_active', true);
         setActiveCount(count || 0);
 
-        // Check if current user is checked in
         if (user) {
            const { data: myCheckin } = await supabase.from('checkins')
              .select('*')
@@ -66,37 +58,6 @@ const LocationDetails = () => {
     fetchLocationData();
   }, [id, user]);
 
-  // 🟢 Fetch Live Google Data (Places API New)
-  useEffect(() => {
-    if (location?.google_place_id && GOOGLE_MAPS_API_KEY !== "YOUR_GOOGLE_MAPS_API_KEY_HERE") {
-      const fetchGoogleDetails = async () => {
-        try {
-          const response = await fetch(
-            `https://places.googleapis.com/v1/places/${location.google_place_id}`, 
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-                'X-Goog-FieldMask': 'formattedAddress,currentOpeningHours,nationalPhoneNumber,websiteUri'
-              }
-            }
-          );
-          const data = await response.json();
-          setLiveDetails({
-            address: data.formattedAddress,
-            hours: data.currentOpeningHours?.weekdayDescriptions?.[(new Date().getDay() + 6) % 7] || "Hours not available",
-            isOpen: data.currentOpeningHours?.openNow,
-            phone: data.nationalPhoneNumber,
-            website: data.websiteUri
-          });
-        } catch (err) { 
-          console.error("Google fetch failed:", err); 
-        }
-      };
-      fetchGoogleDetails();
-    }
-  }, [location?.google_place_id]);
-
   const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371; 
     const dLat = (lat2-lat1) * (Math.PI/180);
@@ -113,6 +74,7 @@ const LocationDetails = () => {
     navigator.geolocation.getCurrentPosition(async (position) => {
       const dist = getDistanceFromLatLonInKm(position.coords.latitude, position.coords.longitude, location.latitude, location.longitude);
 
+      // Distance Check: 0.5km
       if (dist > 0.5) {
         toast.error(`Too far! You are ${dist.toFixed(1)}km away.`);
         setCheckingLocation(false);
@@ -162,6 +124,25 @@ const LocationDetails = () => {
     </div>
   );
 
+  // 🟢 Helper Logic: Get Today's Hours
+  // We look at the 'hours' column (which is a big string) or the 'google_data' JSON
+  let todayHours = "Hours info not available";
+  
+  if (location.hours) {
+    // Attempt to find the line that matches today (e.g., "Friday: 5:00 PM – 2:00 AM")
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const todayName = days[new Date().getDay()];
+    const hoursLines = location.hours.split('\n'); // The script saved it joined by newlines
+    const match = hoursLines.find(line => line.includes(todayName));
+    if (match) todayHours = match; // e.g. "Friday: 5PM - 2AM"
+    else todayHours = location.hours; // Fallback to showing everything if parsing fails
+  }
+
+  // 🟢 Helper Logic: Price & Rating
+  const price = location.price_level || "$$";
+  const rating = location.google_rating || location.rating || 4.5;
+  const reviewCount = location.google_user_ratings_total || 0;
+
   return (
     <div className="min-h-screen bg-slate-950 pb-20">
       
@@ -187,42 +168,41 @@ const LocationDetails = () => {
           <div className="flex items-center gap-3 mb-2">
              <div className="flex items-center gap-1">
                 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                <span className="text-white font-bold text-sm">{location.rating || 4.5}</span>
+                <span className="text-white font-bold text-sm">{rating}</span>
+                <span className="text-slate-400 text-xs">({reviewCount})</span>
              </div>
              <span className="px-2 py-0.5 bg-amber-500 text-black text-[10px] font-black rounded-md uppercase">{location.type}</span>
-             {liveDetails.isOpen !== null && (
-              <span className={`text-[10px] font-black tracking-tighter ${liveDetails.isOpen ? 'text-green-400' : 'text-red-400'}`}>
-                {liveDetails.isOpen ? "● OPEN NOW" : "● CLOSED"}
-              </span>
-            )}
+             <span className="text-green-400 text-xs font-bold tracking-widest">{price}</span>
           </div>
         </div>
       </div>
 
       <div className="p-6 space-y-6">
         
-        {/* Live Info Card */}
+        {/* Info Card - Reading from Database columns now! */}
         <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
           <div className="flex items-start gap-4 text-slate-300">
             <Clock className="text-amber-500 w-5 h-5 shrink-0 mt-0.5" />
-            <span className="text-sm font-medium">{liveDetails.hours || location.hours || "Loading hours..."}</span>
+            <span className="text-sm font-medium">{todayHours}</span>
           </div>
           <div className="flex items-start gap-4 text-slate-300">
             <MapPin className="text-amber-500 w-5 h-5 shrink-0 mt-0.5" />
-            <span className="text-sm font-medium">{liveDetails.address || location.address || "Loading address..."}</span>
+            <span className="text-sm font-medium">{location.address || "Address loading..."}</span>
           </div>
           
           <div className="grid grid-cols-2 gap-3 pt-2">
-            <a 
-                href={`https://www.google.com/maps/dir/?api=1&destination_place_id=${location.google_place_id}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition border border-slate-700"
-            >
-                <Navigation size={14} className="text-amber-500" /> Directions
-            </a>
-            {liveDetails.website && (
+            {location.google_place_id && (
                 <a 
-                    href={liveDetails.website}
+                    href={`https://www.google.com/maps/place/?q=place_id:${location.google_place_id}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition border border-slate-700"
+                >
+                    <Navigation size={14} className="text-amber-500" /> Directions
+                </a>
+            )}
+            {location.website && (
+                <a 
+                    href={location.website}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition border border-slate-700"
                 >
@@ -232,7 +212,7 @@ const LocationDetails = () => {
           </div>
         </div>
 
-        {/* 🟢 Mini Map Embed */}
+        {/* Mini Map Embed */}
         {location.google_place_id && (
           <div className="rounded-2xl overflow-hidden border border-slate-800 h-44 w-full shadow-2xl">
             <iframe
@@ -268,7 +248,7 @@ const LocationDetails = () => {
             )}
         </div>
 
-        {/* 🟢 User Grid or Party Meter Logic */}
+        {/* Party Meter Logic */}
         <div className="border-t border-slate-800 pt-6">
           {checkedIn ? (
             <UserGrid locationId={id} key={gridRefreshKey} />
