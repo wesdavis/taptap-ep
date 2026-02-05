@@ -7,7 +7,7 @@ import UserGrid from '../components/location/UserGrid';
 import { toast } from 'sonner';
 
 // 🟢 ADD YOUR KEY HERE
-const GOOGLE_MAPS_API_KEY = AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk;
+const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
 const LocationDetails = () => {
   const { id } = useParams(); 
