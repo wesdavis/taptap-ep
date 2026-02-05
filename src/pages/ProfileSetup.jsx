@@ -1,283 +1,235 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
-import { Camera, User, Loader2, AtSign, Calendar, ArrowLeft, LogOut } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Camera, ArrowLeft, Zap } from 'lucide-react';
+import { toast } from 'sonner';
+
+// 🟢 YOUR API KEY
+const GOOGLE_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
 export default function ProfileSetup() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false); // New state for image upload
   
-  // Form State
-  const [displayName, setDisplayName] = useState('');
-  const [handle, setHandle] = useState('');
-  const [birthdate, setBirthdate] = useState('');
-  const [bio, setBio] = useState('');
-  const [gender, setGender] = useState('');      
-  const [lookingFor, setLookingFor] = useState(''); 
-  const [avatarUrl, setAvatarUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    full_name: '',
+    handle: '',
+    gender: '',
+    bio: '',
+    avatar_url: ''
+  });
 
-  // Load existing data
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!user) return;
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (data && !error) {
-        setDisplayName(data.display_name || '');
-        setHandle(data.handle || '');
-        setBirthdate(data.birthdate || '');
-        setBio(data.bio || '');
-        setGender(data.gender || '');          
-        setLookingFor(data.looking_for || ''); 
-        setAvatarUrl(data.avatar_url || '');
-      }
-    };
-    loadProfile();
+    if (user) loadProfile();
   }, [user]);
 
-  // Handle Avatar Upload
-  const handleImageUpload = async (event) => {
+  async function loadProfile() {
     try {
-      setUploading(true);
-
-      if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('You must select an image to upload.');
-      }
-
-      const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      // 1. Upload to Supabase Storage ('avatars' bucket)
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // 2. Get Public URL
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      
-      // 3. Set State (This will be saved to DB on form submit)
-      setAvatarUrl(data.publicUrl);
-
-    } catch (error) {
-      alert('Error uploading avatar: ' + error.message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) return;
-
-    try {
-      setLoading(true);
-
-      const cleanHandle = handle.replace('@', '').toLowerCase().replace(/\s/g, '');
-
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          display_name: displayName,
-          handle: cleanHandle,
-          birthdate: birthdate,
-          bio: bio,
-          gender: gender,             
-          looking_for: lookingFor,    
-          avatar_url: avatarUrl,
-          updated_at: new Date().toISOString(),
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (error && error.code !== 'PGRST116') throw error; // Ignore "not found" error for new users
+      if (data) {
+        setFormData({
+            full_name: data.full_name || '',
+            handle: data.handle || '',
+            gender: data.gender || '',
+            bio: data.bio || '',
+            avatar_url: data.avatar_url || ''
         });
-
-      if (error) throw error;
-      navigate('/'); 
-
+      }
     } catch (error) {
-      console.error('Error updating profile:', error.message);
-      alert('Error saving profile. ' + error.message);
+      console.error(error);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+        const { error } = await supabase.from('profiles').upsert({
+            id: user.id,
+            ...formData,
+            updated_at: new Date()
+        });
+        if (error) throw error;
+        toast.success("Profile updated!");
+        navigate('/'); // Go back home after save
+    } catch (error) {
+        toast.error("Error updating profile");
+    } finally {
+        setSaving(false);
+    }
+  }
+
+  // 🟢 ADMIN FUNCTION: Enrich All Locations
+  const runEnrichment = async () => {
+    if (!confirm("Admin Action: Fetch live data from Google for ALL locations?")) return;
+    setEnriching(true);
+    toast.info("Starting enrichment... please wait.");
+
+    try {
+        // 1. Get locations with a Google Place ID
+        const { data: locs } = await supabase
+            .from('locations')
+            .select('id, name, google_place_id')
+            .not('google_place_id', 'is', null);
+
+        let count = 0;
+        
+        // 2. Loop and Update
+        for (const loc of locs || []) {
+            try {
+                const res = await fetch(`https://places.googleapis.com/v1/places/${loc.google_place_id}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': GOOGLE_KEY,
+                        'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary'
+                    }
+                });
+
+                const data = await res.json();
+                const updates = {};
+
+                if (data.rating) updates.google_rating = data.rating;
+                if (data.userRatingCount) updates.google_user_ratings_total = data.userRatingCount;
+                if (data.nationalPhoneNumber) updates.phone = data.nationalPhoneNumber;
+                if (data.websiteUri) updates.website = data.websiteUri;
+                if (data.editorialSummary?.text) updates.description = data.editorialSummary.text;
+                
+                // Helper for Price
+                const priceMap = { 'PRICE_LEVEL_INEXPENSIVE': '$', 'PRICE_LEVEL_MODERATE': '$$', 'PRICE_LEVEL_EXPENSIVE': '$$$' };
+                if (data.priceLevel) updates.price_level = priceMap[data.priceLevel] || '$$';
+
+                // Helper for Hours
+                if (data.regularOpeningHours?.weekdayDescriptions) {
+                    updates.hours = data.regularOpeningHours.weekdayDescriptions.join('\n');
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await supabase.from('locations').update(updates).eq('id', loc.id);
+                    count++;
+                }
+                // Rate limit pause
+                await new Promise(r => setTimeout(r, 200));
+
+            } catch (err) { console.error(err); }
+        }
+        toast.success(`Updated ${count} locations!`);
+    } catch (err) {
+        toast.error("Enrichment failed.");
+    } finally {
+        setEnriching(false);
+    }
   };
 
-  const handleLogout = async () => {
-    await logout(); 
-    navigate('/auth');
-  };
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center p-4">
-      
-      {/* HEADER WITH NAVIGATION */}
-      <div className="w-full max-w-md flex justify-between items-center mb-6 mt-2">
-        <button onClick={() => navigate('/')} className="p-2 bg-slate-900 rounded-full text-white hover:bg-slate-800 transition">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <span className="text-white font-bold text-lg">Edit Profile</span>
-        <button onClick={handleLogout} className="p-2 bg-red-500/10 text-red-500 rounded-full hover:bg-red-500/20 transition">
-          <LogOut className="w-5 h-5" />
-        </button>
-      </div>
-
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl mb-10">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-white">Your Name Tag</h1>
-          <p className="text-slate-400 text-sm">This is how people see you.</p>
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="max-w-md mx-auto">
+        
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-slate-400">
+                <ArrowLeft className="w-6 h-6" />
+            </Button>
+            <h1 className="text-2xl font-bold">Edit Profile</h1>
         </div>
 
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* Avatar Upload */}
-          <div className="flex justify-center">
-            <div className="relative group cursor-pointer">
-              <label htmlFor="avatar-upload" className="cursor-pointer block relative">
-                <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-amber-500 flex items-center justify-center overflow-hidden">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-10 h-10 text-slate-500" />
-                  )}
-                  
-                  {/* Upload Spinner Overlay */}
-                  {uploading && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
-                      <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Hover Camera Icon */}
-                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <Camera className="w-6 h-6 text-white" />
-                </div>
-              </label>
-              
-              {/* Hidden File Input */}
-              <input 
-                type="file" 
-                id="avatar-upload"
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </div>
-          </div>
-
-          {/* Identity Section */}
-          <div className="space-y-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Identity</h3>
             
-            {/* Display Name */}
-            <div>
-              <label className="text-xs text-slate-300 mb-1 block">Display Name</label>
-              <input
-                type="text"
-                required
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-amber-500 focus:outline-none"
-                placeholder="e.g. Wes Davis" 
-              />
-            </div>
-
-            {/* Handle */}
-            <div>
-              <label className="text-xs text-slate-300 mb-1 block">Handle</label>
-              <div className="relative">
-                <AtSign className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
-                <input
-                  type="text"
-                  required
-                  value={handle}
-                  onChange={(e) => setHandle(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 pl-10 text-amber-500 font-medium focus:border-amber-500 focus:outline-none"
-                  placeholder="wesdavis" 
-                />
-              </div>
-            </div>
-
-             {/* Birthday */}
-             <div>
-              <label className="text-xs text-slate-300 mb-1 block">Birthday</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
-                <input
-                  type="date"
-                  required
-                  value={birthdate}
-                  onChange={(e) => setBirthdate(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 pl-10 text-white focus:border-amber-500 focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* The Basics */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">I am...</label>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-amber-500 focus:outline-none appearance-none"
-              >
-                <option value="">Select</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Non-binary">Non-binary</option>
-              </select>
+            <div className="flex justify-center mb-6">
+                <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center relative overflow-hidden group cursor-pointer">
+                    {formData.avatar_url ? (
+                        <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                        <Camera className="w-8 h-8 text-slate-500" />
+                    )}
+                    {/* Note: Real image upload requires Storage setup. For now, text URL is fine. */}
+                </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Seeking...</label>
-              <select
-                value={lookingFor}
-                onChange={(e) => setLookingFor(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-amber-500 focus:outline-none appearance-none"
-              >
-                <option value="">Select</option>
-                <option value="Men">Men</option>
-                <option value="Women">Women</option>
-                <option value="Everyone">Everyone</option>
-              </select>
+                <Label>Display Name</Label>
+                <Input 
+                    required 
+                    value={formData.full_name} 
+                    onChange={e => setFormData({...formData, full_name: e.target.value})} 
+                    className="bg-slate-900 border-slate-800" 
+                />
             </div>
-          </div>
 
-          {/* Bio (Short) */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">Quick Intro</label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              rows={2}
-              maxLength={100} // Keep it short!
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-amber-500 focus:outline-none"
-              placeholder="e.g. New in town, love craft beer."
-            />
-          </div>
+            <div className="space-y-2">
+                <Label>Handle (@username)</Label>
+                <Input 
+                    required 
+                    value={formData.handle} 
+                    onChange={e => setFormData({...formData, handle: e.target.value.toLowerCase().replace(/\s/g, '')})} 
+                    className="bg-slate-900 border-slate-800" 
+                />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Save Name Tag'}
-          </button>
+            <div className="space-y-2">
+                <Label>Gender</Label>
+                <Select 
+                    value={formData.gender} 
+                    onValueChange={val => setFormData({...formData, gender: val})}
+                >
+                    <SelectTrigger className="bg-slate-900 border-slate-800">
+                        <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Non-binary">Non-binary</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div className="space-y-2">
+                <Label>Bio</Label>
+                <Textarea 
+                    value={formData.bio} 
+                    onChange={e => setFormData({...formData, bio: e.target.value})} 
+                    className="bg-slate-900 border-slate-800" 
+                    placeholder="Tell us about yourself..."
+                />
+            </div>
+
+            <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">
+                {saving ? <Loader2 className="animate-spin" /> : "Save Changes"}
+            </Button>
         </form>
+
+        {/* 🟢 ADMIN SECTION (Hidden at bottom) */}
+        <div className="mt-12 pt-12 border-t border-slate-800/50">
+            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4">Admin Zone</h3>
+            <Button 
+                variant="outline" 
+                onClick={runEnrichment}
+                disabled={enriching}
+                className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10"
+            >
+                {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+                {enriching ? "Enriching Database..." : "Enrich All Locations"}
+            </Button>
+            <p className="text-[10px] text-slate-600 mt-2 text-center">
+                Fetches Ratings, Prices, and Hours from Google for all venues.
+            </p>
+        </div>
+
       </div>
     </div>
   );
