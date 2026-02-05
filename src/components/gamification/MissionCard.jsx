@@ -7,25 +7,27 @@ export default function MissionCard({ ping, onComplete, onCancel }) {
   const [loading, setLoading] = useState(false);
 
   const handleConfirmMeet = async () => {
-    try {
-      setLoading(true);
-      // Update DB to say "Met Confirmed"
-      const { error } = await supabase
-        .from('pings')
-        .update({ met_confirmed: true })
-        .eq('id', ping.id);
-
-      if (error) throw error;
-
-      toast.success("Mission Accomplished! +50 XP");
-      if (onComplete) onComplete();
-    } catch (err) {
-      console.error(err);
-      toast.error("Error confirming meet");
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    // Distance check (Assume ping.location_id metadata or fetch from pings)
+    // For now, check if user is at the venue stored in the ping record
+    const { data: loc } = await supabase.from('locations').select('latitude, longitude').eq('id', ping.location_id).single();
+    
+    if (loc) {
+      const dist = getDistanceFromLatLonInKm(position.coords.latitude, position.coords.longitude, loc.latitude, loc.longitude);
+      if (dist > 0.5) {
+        toast.error("You need to be at the venue to confirm!");
+        setLoading(false);
+        return;
+      }
     }
-  };
+
+    const { error } = await supabase.from('pings').update({ met_confirmed: true }).eq('id', ping.id);
+    if (!error) toast.success("Mission Accomplished!");
+    if (onComplete) onComplete();
+    setLoading(false);
+  });
+};
 
   return (
     <div className="bg-amber-500/10 border border-amber-500/50 p-4 rounded-xl relative animate-in fade-in slide-in-from-bottom-2 duration-500">

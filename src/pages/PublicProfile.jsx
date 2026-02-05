@@ -86,32 +86,44 @@ export default function PublicProfile() {
     }
 
     const handleUniversalTap = async () => {
-        if (!myLiveLocation) {
-            toast.error("You must be checked in to a location to tap!");
-            return;
-        }
+    // 1. Fetch my current active check-in
+    const { data: myCheckin } = await supabase
+        .from('checkins')
+        .select('location_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
 
-        setIsSubmitting(true);
+    // 2. Fetch the target user's current active check-in
+    const { data: targetCheckin } = await supabase
+        .from('checkins')
+        .select('location_id')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .maybeSingle();
 
-        try {
-            const { error } = await supabase.from('pings').insert({
-                from_user_id: user.id,
-                to_user_id: userId,
-                location_id: myLiveLocation,
-                status: 'pending'
-            });
+    if (!myCheckin || !targetCheckin || String(myCheckin.location_id) !== String(targetCheckin.location_id)) {
+        toast.error("You must be at the same venue to tap!");
+        return;
+    }
 
-            if (error) throw error;
-            
-            setStatus('pending');
-            toast.success(`You tapped ${profile.full_name}!`);
-        } catch (error) {
-            console.error(error);
-            toast.error("Could not send tap. Try refreshing.");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+    setIsSubmitting(true);
+    try {
+        const { error } = await supabase.from('pings').insert({
+            from_user_id: user.id,
+            to_user_id: userId,
+            location_id: myCheckin.location_id,
+            status: 'pending'
+        });
+        if (error) throw error;
+        setStatus('pending');
+        toast.success(`You tapped ${profile.full_name}!`);
+    } catch (error) {
+        toast.error("Tap failed.");
+    } finally {
+        setIsSubmitting(false);
+    }
+};
 
     if (loading) return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
