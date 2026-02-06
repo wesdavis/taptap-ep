@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
-import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Eye, Edit3 } from 'lucide-react';
+import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 API KEY
@@ -153,85 +153,83 @@ const Home = () => {
 
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
-      <div className="bg-slate-900 border-b border-slate-800 p-6 rounded-b-3xl shadow-2xl mb-6 relative overflow-hidden">
+      
+      {/* 🟢 NEW: CINEMATIC HEADER (Fills the space!) */}
+      <div className="relative w-full h-[45vh] min-h-[400px] bg-slate-900 rounded-b-[3rem] overflow-hidden shadow-2xl mb-8 group">
         
-        {/* Background Blur Effect */}
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
+        {/* 1. The Giant Photo Background */}
+        {profile?.avatar_url ? (
+            <img 
+                src={profile.avatar_url} 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                onClick={() => navigate(`/user/${user?.id}`)}
+                alt="Profile"
+            />
+        ) : (
+            <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
+                <User className="w-24 h-24 text-slate-600" />
+            </div>
+        )}
 
-        {/* 🟢 NEW: FRONT & CENTER PROFILE (Beveled & Larger) */}
-        <div className="flex flex-col items-center relative z-10 pt-4">
+        {/* 2. The Gradient Overlay (Ensures text is readable) */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none" />
+
+        {/* 3. The Floating Content */}
+        <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-center text-center z-10">
             
-            {/* The Avatar Token */}
-            <div 
-                onClick={() => navigate(`/user/${user?.id}`)} 
-                className="relative w-32 h-32 rounded-full cursor-pointer group hover:scale-105 transition-transform duration-300"
-            >
-                {/* 1. The Outer Glow/Ring */}
-                <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-amber-600 to-amber-300 opacity-70 blur-sm group-hover:opacity-100 transition-opacity"></div>
-                
-                {/* 2. The Bevel Container */}
-                <div className="relative w-full h-full rounded-full border-4 border-slate-900 shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)] overflow-hidden bg-slate-800">
-                     {profile?.avatar_url ? (
-                        <img src={profile.avatar_url} className="w-full h-full object-cover" />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center"><User className="text-slate-500 w-12 h-12" /></div>
-                    )}
-                </div>
-
-                {/* 3. The "View" Badge */}
-                <div className="absolute bottom-1 right-1 bg-amber-500 text-black p-2 rounded-full border-4 border-slate-900 shadow-lg">
-                    <Eye className="w-4 h-4 fill-black" />
-                </div>
-            </div>
-
             {/* Name & Handle */}
-            <div className="text-center mt-4 space-y-1">
-                <h1 className="text-3xl font-black text-white tracking-tight drop-shadow-md">{profile?.display_name || "Explorer"}</h1>
-                <p className="text-amber-500 text-sm font-bold tracking-wide">@{profile?.handle || "user"}</p>
-            </div>
+            <h1 
+                onClick={() => navigate(`/user/${user?.id}`)}
+                className="text-4xl font-black text-white tracking-tight drop-shadow-lg cursor-pointer"
+            >
+                {profile?.display_name || "Explorer"}
+            </h1>
+            <p className="text-amber-400 text-lg font-bold tracking-wide drop-shadow-md mb-4">
+                @{profile?.handle || "user"}
+            </p>
 
-            {/* Action Bar */}
-            <div className="flex items-center gap-3 mt-5">
-                {/* XP Pill */}
-                <div className="bg-slate-800/80 px-4 py-2 rounded-full border border-slate-700/50 flex items-center gap-2 backdrop-blur-md">
-                    <Trophy className="w-4 h-4 text-yellow-500" />
+            {/* Stats & Edit Row */}
+            <div className="flex items-center gap-3">
+                {/* XP Badge */}
+                <div className="bg-black/40 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+                    <Trophy className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                     <span className="text-sm font-bold text-white">{profile?.xp || 0} XP</span>
                 </div>
-                
+
                 {/* Edit Button */}
                 <button 
                     onClick={(e) => { e.stopPropagation(); navigate('/profile-setup'); }}
-                    className="bg-slate-800/80 px-4 py-2 rounded-full border border-slate-700/50 flex items-center gap-2 backdrop-blur-md hover:bg-slate-700 transition"
+                    className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full flex items-center gap-2 hover:bg-white/20 transition active:scale-95 shadow-lg"
                 >
-                    <Edit3 className="w-4 h-4 text-slate-400" />
-                    <span className="text-sm font-bold text-slate-400">Edit</span>
+                    <Edit3 className="w-4 h-4 text-white" />
+                    <span className="text-sm font-bold text-white">Edit Profile</span>
                 </button>
             </div>
         </div>
+      </div>
 
-        {/* GAME LAYER */}
-        <div className="space-y-4 mt-8">
-           {activeMissions.map(ping => (
-                <MissionCard 
-                    key={ping.id} 
-                    ping={ping} 
-                    onCancel={() => handleCancelPing(ping.id)} 
-                    onComplete={() => window.location.reload()} 
-                />
-            ))}
-           {mysteryPings.map(ping => (
-                <MysteryCard 
-                    key={ping.id} 
-                    ping={ping} 
-                    onCancel={() => handleCancelPing(ping.id)} 
-                />
-            ))}
-        </div>
+      {/* GAME LAYER */}
+      <div className="space-y-4 px-4 -mt-4 relative z-20">
+         {activeMissions.map(ping => (
+              <MissionCard 
+                  key={ping.id} 
+                  ping={ping} 
+                  onCancel={() => handleCancelPing(ping.id)} 
+                  onComplete={() => window.location.reload()} 
+              />
+          ))}
+         {mysteryPings.map(ping => (
+              <MysteryCard 
+                  key={ping.id} 
+                  ping={ping} 
+                  onCancel={() => handleCancelPing(ping.id)} 
+              />
+          ))}
       </div>
 
       {/* ACTIVE LOCATION CARD */}
       {currentCheckIn && (
-        <div className="px-4 mb-8">
+        <div className="px-4 mb-8 mt-6">
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-amber-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                 <div className="flex justify-between items-start mb-6 relative z-10">
