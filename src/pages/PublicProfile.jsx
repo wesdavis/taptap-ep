@@ -21,8 +21,13 @@ export default function PublicProfile() {
     const [myGender, setMyGender] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // 🟢 NEW: Full Screen Photo State
+    // 🟢 NEW: Location State
+    const [isSameLocation, setIsSameLocation] = useState(false);
+    
+    // Full Screen Photo State
     const [selectedPhoto, setSelectedPhoto] = useState(null);
+
+    const isMe = user?.id === userId;
 
     useEffect(() => {
         if (user && userId && userId !== "undefined") {
@@ -34,7 +39,7 @@ export default function PublicProfile() {
 
     async function loadUniversalData() {
         try {
-            // 1. Fetch Target User
+            // 1. Fetch Target User Profile
             const { data: profileData, error } = await supabase
                 .from('profiles')
                 .select('*')
@@ -52,23 +57,36 @@ export default function PublicProfile() {
                 .single();
             setMyGender(myProfile?.gender);
 
-            // 3. 🟢 ISSUE 2 FIX: Check Status (Scoped to Current Session)
+            // 3. 🟢 LOCATION CHECK (The "Smart Gate")
+            // Fetch MY active checkin
             const { data: myCheckin } = await supabase
                 .from('checkins')
-                .select('location_id, created_at')
+                .select('location_id')
                 .eq('user_id', user.id)
                 .eq('is_active', true)
                 .maybeSingle();
 
+            // Fetch TARGET'S active checkin
+            const { data: targetCheckin } = await supabase
+                .from('checkins')
+                .select('location_id')
+                .eq('user_id', userId)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            // Are we at the same place?
+            const match = myCheckin && targetCheckin && (myCheckin.location_id === targetCheckin.location_id);
+            setIsSameLocation(match);
+
+            // 4. Check Status (Only if we are active, check for existing pings)
             if (myCheckin) {
-                // Only check for pings sent AFTER I checked in
                 const { data: ping } = await supabase
                     .from('pings')
                     .select('status')
                     .eq('from_user_id', user.id)
                     .eq('to_user_id', userId)
-                    .eq('location_id', myCheckin.location_id) // Match location
-                    .gt('created_at', myCheckin.created_at)   // Match time
+                    .eq('location_id', myCheckin.location_id)
+                    .gt('created_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()) // Look back 12 hours max
                     .maybeSingle();
 
                 if (ping) setStatus(ping.status || 'pending');
@@ -82,27 +100,22 @@ export default function PublicProfile() {
     }
 
     const handleUniversalTap = async () => {
-        const { data: myCheckin } = await supabase
-            .from('checkins')
-            .select('location_id')
-            .eq('user_id', user.id)
-            .eq('is_active', true)
-            .maybeSingle();
-
-        const { data: targetCheckin } = await supabase
-            .from('checkins')
-            .select('location_id')
-            .eq('user_id', userId)
-            .eq('is_active', true)
-            .maybeSingle();
-
-        if (!myCheckin || !targetCheckin || String(myCheckin.location_id) !== String(targetCheckin.location_id)) {
+        // Double check safety (though button is hidden if false)
+        if (!isSameLocation) {
             toast.error("You must be at the same venue to tap!");
             return;
         }
 
         setIsSubmitting(true);
         try {
+            // Re-fetch my location just to be safe for the insert
+            const { data: myCheckin } = await supabase
+                .from('checkins')
+                .select('location_id')
+                .eq('user_id', user.id)
+                .eq('is_active', true)
+                .single();
+
             const { error } = await supabase.from('pings').insert({
                 from_user_id: user.id,
                 to_user_id: userId,
@@ -128,7 +141,6 @@ export default function PublicProfile() {
     if (!profile) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">User not found</div>;
 
     const isFemale = (myGender || '').toLowerCase() === 'female';
-    // 🟢 Use the new photos array, or fallback to avatar
     const photos = (profile.photos && profile.photos.length > 0) ? profile.photos : [profile.avatar_url];
 
     return (
@@ -142,16 +154,14 @@ export default function PublicProfile() {
 
             <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
                 
-                {/* 🟢 NEW: PHOTO GALLERY (Click to Expand) */}
+                {/* PHOTO GALLERY */}
                 <div className="w-full max-w-sm mb-6 grid grid-cols-2 gap-2">
-                    {/* Main Photo (Big) */}
                     <div 
                         className="col-span-2 aspect-square rounded-2xl overflow-hidden border-2 border-slate-800 shadow-2xl cursor-pointer"
                         onClick={() => setSelectedPhoto(photos[0])}
                     >
                         <img src={photos[0]} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                     </div>
-                    {/* Smaller Photos */}
                     {photos.slice(1, 3).map((photo, i) => (
                          <div 
                             key={i} 
@@ -163,7 +173,8 @@ export default function PublicProfile() {
                     ))}
                 </div>
 
-                <h2 className="text-3xl font-bold mb-2 text-center">{profile.full_name}</h2>
+                <h2 className="text-3xl font-bold mb-2 text-center">{profile.display_name || profile.full_name}</h2>
+                <p className="text-amber-500 font-bold mb-4">@{profile.handle}</p>
                 
                 <div className="flex items-center gap-2 text-slate-400 mb-6">
                     <MapPin className="w-4 h-4" /> 
@@ -180,7 +191,14 @@ export default function PublicProfile() {
                     </Badge>
                 </div>
 
-                {isFemale && status === null && (
+                <SharedHistory targetUserId={userId} />
+
+                {/* 🟢 THE SMART BUTTON LOGIC */}
+                {/* 1. NOT Me */}
+                {/* 2. Female */}
+                {/* 3. SAME LOCATION (The Gatekeeper) */}
+                {/* 4. Not already sent */}
+                {isFemale && !isMe && isSameLocation && status === null && (
                     <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
                         <Button 
                             disabled={isSubmitting}
@@ -192,7 +210,8 @@ export default function PublicProfile() {
                     </div>
                 )}
 
-                {isFemale && status === 'pending' && (
+                {/* SHOW "SENT" (Even if I left the venue, I want to know I tried) */}
+                {isFemale && !isMe && status === 'pending' && (
                     <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
                         <Button disabled className="w-full h-14 text-lg font-bold bg-slate-800 text-slate-400 border border-slate-700 rounded-2xl">
                             <Check className="w-5 h-5 mr-2" /> TAP SENT
@@ -201,7 +220,7 @@ export default function PublicProfile() {
                 )}
             </div>
 
-            {/* 🟢 FULL SCREEN LIGHTBOX */}
+            {/* LIGHTBOX */}
             {selectedPhoto && (
                 <div 
                     className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
@@ -217,6 +236,42 @@ export default function PublicProfile() {
                     />
                 </div>
             )}
+        </div>
+    );
+}
+
+function SharedHistory({ targetUserId }) {
+    const { user } = useAuth();
+    const [events, setEvents] = useState([]);
+
+    useEffect(() => {
+        async function load() {
+            if (user?.id === targetUserId) return; 
+            
+            const { data } = await supabase.from('pings')
+                .select('created_at, locations(name)')
+                .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${user.id})`)
+                .eq('status', 'accepted')
+                .order('created_at', { ascending: false });
+            
+            setEvents(data || []);
+        }
+        if (user && targetUserId) load();
+    }, [user, targetUserId]);
+
+    if (events.length === 0) return null;
+
+    return (
+        <div className="w-full max-w-xs mt-6 bg-slate-900/50 rounded-xl p-4 border border-slate-800">
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center">Connection History</h3>
+            <div className="space-y-2">
+                {events.map((e, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs text-slate-300">
+                        <span className="flex items-center gap-2"><MapPin className="w-3 h-3 text-amber-500" /> {e.locations?.name || "Unknown"}</span>
+                        <span className="text-slate-500">{new Date(e.created_at).toLocaleDateString()}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
