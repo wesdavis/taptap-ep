@@ -16,6 +16,6 @@
     "resolveJsonModule": true,
     "types": []
   },
-  "include": ["src/components/**/*.js", "src/pages/**/*.jsx", "src/Layout.jsx", "src/components/profile/Placeslist.jsx", "src/components/profile/ConnectionsList.jsx"],
+  "include": ["src/components/**/*.js", "src/pages/**/*.jsx", "src/Layout.jsx", "src/components/profile/PlacesList.jsx", "src/components/profile/ConnectionsList.jsx"],
   "exclude": ["node_modules", "dist", "src/vite-plugins", "src/components/ui", "src/api", "src/lib"]
 } 
