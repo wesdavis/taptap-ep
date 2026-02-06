@@ -10,9 +10,6 @@ import { toast } from 'sonner';
 // 🟢 API KEY
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
-// 🟢 CONFIG: The Name of the place to Promote (Case Sensitive)
-const PROMOTED_VENUE_NAME = "The Coffee Box";
-
 // Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; 
@@ -39,7 +36,7 @@ const Home = () => {
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
-  const [currentCity, setCurrentCity] = useState("El Paso"); // 🟢 Default City
+  const [currentCity, setCurrentCity] = useState("El Paso"); 
   
   const [currentCheckIn, setCurrentCheckIn] = useState(null); 
   const [activeUsersAtLocation, setActiveUsersAtLocation] = useState([]);
@@ -51,12 +48,11 @@ const Home = () => {
         const lng = position.coords.longitude;
         setUserCoords({ latitude: lat, longitude: lng });
 
-        // 🟢 NEW: Reverse Geocode to get City Name
+        // Reverse Geocode to get City Name
         try {
             const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`);
             const data = await res.json();
             if (data.results && data.results.length > 0) {
-                // Find the "locality" (City) component
                 const addressComponents = data.results[0].address_components;
                 const cityObj = addressComponents.find(c => c.types.includes("locality"));
                 if (cityObj) setCurrentCity(cityObj.long_name);
@@ -165,14 +161,11 @@ const Home = () => {
     });
   }, [locations, userCoords, sortBy]);
 
-  // 🟢 NEW: Smarter Promo Logic (Case Insensitive)
-  // 1. Find the promoted spot loosely (ignores capitalization or extra spaces)
-  const promotedLocation = sortedLocations.find(l => 
-    l.name.toLowerCase().trim() === PROMOTED_VENUE_NAME = "Coffee Box".toLowerCase().trim()
-  );
-
-  // 2. Filter it out of the main list so it doesn't appear twice
-  // If we didn't find a promoted spot, just show the whole list normally.
+  // 🟢 NEW: Database-Driven Promo Logic (No more hardcoding names!)
+  // It simply looks for the row where is_promoted === true
+  const promotedLocation = sortedLocations.find(l => l.is_promoted === true);
+  
+  // Filter the promoted spot out of the main list so it doesn't show twice
   const otherLocations = promotedLocation 
     ? sortedLocations.filter(l => l.id !== promotedLocation.id)
     : sortedLocations;
@@ -282,7 +275,7 @@ const Home = () => {
         </div>
       )}
 
-      {/* 🟢 NEW: DYNAMIC CITY HEADER */}
+      {/* DYNAMIC CITY HEADER */}
       <div className="px-6 mb-2 flex items-center justify-between">
         <h2 className="text-lg font-bold flex items-center gap-2">
             <MapPin className="w-5 h-5 text-amber-500" /> 
@@ -295,17 +288,15 @@ const Home = () => {
       </div>
       
       <div className="px-4 space-y-3">
-        {/* 🟢 NEW: PROMOTED SLOT (Pinned to Top) */}
+        
+        {/* PROMOTED SLOT (Active if DB is_promoted = true) */}
         {promotedLocation && (
             <div 
                 key={promotedLocation.id} 
                 onClick={() => navigate(`/location/${promotedLocation.id}`)}
                 className="bg-amber-950/20 border-2 border-amber-500/50 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden"
             >
-                {/* Gold Glow Effect */}
                 <div className="absolute -right-10 -top-10 w-32 h-32 bg-amber-500/20 blur-3xl rounded-full pointer-events-none"></div>
-                
-                {/* Promoted Badge */}
                 <div className="absolute top-2 right-2 flex items-center gap-1 bg-amber-500 text-black text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm z-10">
                     <Crown className="w-3 h-3 fill-black" />
                     PROMOTED
@@ -344,7 +335,7 @@ const Home = () => {
             </div>
         )}
 
-        {/* STANDARD LIST (Mapped normally) */}
+        {/* STANDARD LIST */}
         {otherLocations.map((loc) => {
             const imageUrl = (loc.google_photos && loc.google_photos.length > 0)
                 ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`

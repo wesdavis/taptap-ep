@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Camera, ArrowLeft, Zap, Image as ImageIcon, LogOut, MapPin, X, Plus } from 'lucide-react';
+import { Loader2, Camera, ArrowLeft, Zap, Image as ImageIcon, LogOut, MapPin, X, Plus, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 YOUR API KEY
@@ -25,7 +25,9 @@ export default function ProfileSetup() {
   const [enriching, setEnriching] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [progress, setProgress] = useState(0);
-  
+  const [venues, setVenues] = useState([]); // For dropdown
+  const [selectedPromoId, setSelectedPromoId] = useState("");
+
   const [formData, setFormData] = useState({
     full_name: '',
     handle: '',
@@ -36,7 +38,10 @@ export default function ProfileSetup() {
   });
 
   useEffect(() => {
-    if (user) loadProfile();
+    if (user) {
+        loadProfile();
+        loadVenues(); // Load venues for admin tool
+    }
   }, [user]);
 
   async function loadProfile() {
@@ -58,6 +63,15 @@ export default function ProfileSetup() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadVenues() {
+      const { data } = await supabase.from('locations').select('id, name, is_promoted').order('name');
+      if (data) {
+          setVenues(data);
+          const currentPromo = data.find(l => l.is_promoted);
+          if (currentPromo) setSelectedPromoId(currentPromo.id.toString());
+      }
   }
 
   async function handlePhotoUpload(e) {
@@ -106,8 +120,6 @@ export default function ProfileSetup() {
     try {
         const cleanHandle = formData.handle.replace('@', '').toLowerCase().replace(/\s/g, '');
         
-        // 🟢 FIX: Force Avatar to ALWAYS be the first photo in the gallery
-        // If no gallery, fallback to existing avatar or auto-generated one.
         let finalAvatar = formData.photos.length > 0 ? formData.photos[0] : formData.avatar_url;
         
         if (!finalAvatar) {
@@ -120,7 +132,7 @@ export default function ProfileSetup() {
             handle: cleanHandle,
             gender: formData.gender,
             bio: formData.bio,
-            avatar_url: finalAvatar, // <--- This now syncs with Photo #1
+            avatar_url: finalAvatar, 
             photos: formData.photos, 
             updated_at: new Date()
         });
@@ -140,8 +152,26 @@ export default function ProfileSetup() {
     navigate('/auth');
   };
 
-  const runEnrichment = async () => { /* ... Keep Admin Logic ... */ };
-  const runPhotoFetch = async () => { /* ... Keep Admin Logic ... */ };
+  // 🟢 NEW: PROMOTION MANAGER
+  const handleSetPromotion = async () => {
+    if (!selectedPromoId) return;
+    setEnriching(true);
+    try {
+        // 1. Reset all
+        await supabase.from('locations').update({ is_promoted: false }).neq('id', 0);
+        // 2. Set new one
+        await supabase.from('locations').update({ is_promoted: true }).eq('id', selectedPromoId);
+        toast.success("Promotion Updated!");
+        loadVenues(); // Refresh list
+    } catch (e) {
+        toast.error("Failed to set promotion");
+    } finally {
+        setEnriching(false);
+    }
+  }
+
+  const runEnrichment = async () => { /* ... Keep Logic ... */ };
+  const runPhotoFetch = async () => { /* ... Keep Logic ... */ };
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
 
@@ -203,7 +233,7 @@ export default function ProfileSetup() {
                     <SelectContent className="bg-slate-900 border-slate-800 text-white">
                         <SelectItem value="Male">Male</SelectItem>
                         <SelectItem value="Female">Female</SelectItem>
-                        
+                        <SelectItem value="Non-binary">Non-binary</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -215,6 +245,44 @@ export default function ProfileSetup() {
                 {saving ? <Loader2 className="animate-spin" /> : "Save Changes"}
             </Button>
         </form>
+        
+        {/* ADMIN TOOLS */}
+        <div className="mt-12 pt-8 border-t border-slate-800/50 space-y-6">
+            <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2 text-center">Admin Controls</h3>
+            
+            {/* 🟢 NEW: PROMOTION SELECTOR */}
+            <div className="bg-amber-950/20 border border-amber-900/50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                    <Crown className="w-4 h-4 text-amber-500" />
+                    <span className="text-xs font-bold text-amber-500 uppercase">3. Manage Promotion</span>
+                </div>
+                <div className="flex gap-2">
+                    <Select value={selectedPromoId} onValueChange={setSelectedPromoId}>
+                        <SelectTrigger className="bg-slate-900 border-slate-700 h-9 text-xs"><SelectValue placeholder="Select Venue" /></SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-700 text-white">
+                            {venues.map(v => (
+                                <SelectItem key={v.id} value={v.id.toString()}>
+                                    {v.name} {v.is_promoted ? '(Active)' : ''}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button size="sm" onClick={handleSetPromotion} disabled={enriching} className="bg-amber-500 text-black font-bold text-xs h-9">
+                        {enriching ? <Loader2 className="w-3 h-3 animate-spin" /> : "Promote"}
+                    </Button>
+                </div>
+            </div>
+
+            {/* OLD TOOLS */}
+            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3 opacity-50 hover:opacity-100 transition">
+                <Button variant="outline" onClick={runEnrichment} disabled={enriching} className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 h-8 text-xs">
+                    1. Update Coordinates
+                </Button>
+                <Button variant="outline" onClick={runPhotoFetch} disabled={enriching} className="w-full border-pink-500/30 text-pink-400 hover:bg-pink-500/10 h-8 text-xs">
+                    2. Fetch Photos
+                </Button>
+            </div>
+        </div>
       </div>
     </div>
   );
