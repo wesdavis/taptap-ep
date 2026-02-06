@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, User, ChevronRight, Loader2, Zap } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/AuthContext';
+import { ChevronRight, Loader2 } from 'lucide-react';
 
-export default function MyConnections() {
+export default function ConnectionsList() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [people, setPeople] = useState([]);
@@ -14,7 +14,6 @@ export default function MyConnections() {
     async function fetchConnections() {
         if (!user) return;
         
-        // Find pings where I was sender OR receiver, and status is accepted
         const { data } = await supabase
             .from('pings')
             .select(`
@@ -27,13 +26,11 @@ export default function MyConnections() {
             .order('created_at', { ascending: false });
 
         if (data) {
-            // Map to just the "Other Person"
             const connections = data.map(ping => {
                 const other = ping.sender.id === user.id ? ping.receiver : ping.sender;
                 return { ...other, met_at: ping.created_at };
             });
 
-            // Deduplicate (in case you met multiple times)
             const unique = [];
             const seen = new Set();
             connections.forEach(p => {
@@ -49,16 +46,11 @@ export default function MyConnections() {
     fetchConnections();
   }, [user]);
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
+  if (loading) return <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-amber-500" /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4">
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 bg-slate-900 rounded-full text-slate-400"><ArrowLeft className="w-5 h-5" /></button>
-        <h1 className="text-xl font-bold">People Met</h1>
-      </div>
-
-      <div className="space-y-3">
+    <div className="space-y-3 mt-4 animate-in slide-in-from-top-4 fade-in duration-300">
+        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest px-1">Your Circle</h3>
         {people.map((person) => (
             <div 
                 key={person.id} 
@@ -66,9 +58,9 @@ export default function MyConnections() {
                 className="bg-slate-900/50 border border-slate-800 p-3 rounded-xl flex items-center justify-between active:bg-slate-800 transition cursor-pointer"
             >
                 <div className="flex items-center gap-4">
-                    <img src={person.avatar_url} className="w-12 h-12 rounded-full object-cover border border-slate-700" />
+                    <img src={person.avatar_url} className="w-10 h-10 rounded-full object-cover border border-slate-700" />
                     <div>
-                        <h3 className="font-bold text-white">{person.display_name}</h3>
+                        <h3 className="font-bold text-white text-sm">{person.display_name}</h3>
                         <p className="text-xs text-amber-500">@{person.handle}</p>
                     </div>
                 </div>
@@ -78,8 +70,7 @@ export default function MyConnections() {
                 </div>
             </div>
         ))}
-        {people.length === 0 && <p className="text-center text-slate-500 mt-10">Go out and meet someone!</p>}
-      </div>
+        {people.length === 0 && <p className="text-center text-slate-500 py-4 text-sm">No connections yet.</p>}
     </div>
   );
 }

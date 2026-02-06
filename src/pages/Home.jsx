@@ -5,6 +5,8 @@ import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
 import PeopleMetList from '../components/notifications/PeopleMetList'; 
+import PlacesList from '../components/profile/PlacesList'; // 🟢 NEW IMPORT (Update path if needed)
+import ConnectionsList from '../components/profile/ConnectionsList'; // 🟢 NEW IMPORT
 import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,6 +44,9 @@ const Home = () => {
   const [currentCheckIn, setCurrentCheckIn] = useState(null); 
   const [activeUsersAtLocation, setActiveUsersAtLocation] = useState({}); 
   const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 });
+  
+  // 🟢 NEW: State for Expanding Lists
+  const [expandedSection, setExpandedSection] = useState(null); // 'people' | 'places' | null
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -401,24 +406,38 @@ const Home = () => {
           <PeopleMetList />
       </div>
 
-      {/* LIFE STATS (Clickable) */}
-      <div className="mt-8 mx-4 p-4 bg-slate-900 border border-slate-800 rounded-2xl grid grid-cols-2 gap-4 text-center">
-          <div 
-            onClick={() => navigate('/connections')} 
-            className="space-y-1 cursor-pointer hover:bg-slate-800 rounded-xl transition py-2"
-          >
-              <div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div>
-              <div className="text-2xl font-black text-white">{stats.peopleMet}</div>
-              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div>
+      {/* 🟢 EXPANDABLE LIFE STATS */}
+      <div className="mt-8 mx-4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300">
+          
+          {/* THE BUTTONS */}
+          <div className="grid grid-cols-2 p-4 text-center">
+              <div 
+                onClick={() => setExpandedSection(expandedSection === 'people' ? null : 'people')} 
+                className={`space-y-1 cursor-pointer rounded-xl transition py-2 ${expandedSection === 'people' ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}
+              >
+                  <div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div>
+                  <div className="text-2xl font-black text-white">{stats.peopleMet}</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div>
+              </div>
+              
+              <div 
+                onClick={() => setExpandedSection(expandedSection === 'places' ? null : 'places')} 
+                className={`space-y-1 border-l border-slate-800 cursor-pointer rounded-xl transition py-2 ${expandedSection === 'places' ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}
+              >
+                  <div className="flex justify-center text-green-500 mb-1"><MapIcon className="w-6 h-6" /></div>
+                  <div className="text-2xl font-black text-white">{stats.placesVisited}</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Places Visited</div>
+              </div>
           </div>
-          <div 
-            onClick={() => navigate('/places')} 
-            className="space-y-1 border-l border-slate-800 cursor-pointer hover:bg-slate-800 rounded-xl transition py-2"
-          >
-              <div className="flex justify-center text-green-500 mb-1"><MapIcon className="w-6 h-6" /></div>
-              <div className="text-2xl font-black text-white">{stats.placesVisited}</div>
-              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Places Visited</div>
-          </div>
+
+          {/* THE EXPANDABLE CONTENT AREA */}
+          {expandedSection && (
+              <div className="border-t border-slate-800 p-4 bg-slate-950/30 animate-in slide-in-from-top-2 fade-in duration-300">
+                  {expandedSection === 'people' && <ConnectionsList />}
+                  {expandedSection === 'places' && <PlacesList />}
+              </div>
+          )}
+
       </div>
 
     </div>

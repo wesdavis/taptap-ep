@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Calendar, ChevronRight, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/AuthContext';
+import { MapPin, Calendar, ChevronRight, Loader2 } from 'lucide-react';
 
-export default function MyPlaces() {
+export default function PlacesList() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [places, setPlaces] = useState([]);
@@ -13,7 +13,6 @@ export default function MyPlaces() {
   useEffect(() => {
     async function fetchHistory() {
         if (!user) return;
-        // Get all my checkins, ordered by most recent
         const { data } = await supabase
             .from('checkins')
             .select('created_at, locations(*)')
@@ -21,7 +20,6 @@ export default function MyPlaces() {
             .order('created_at', { ascending: false });
 
         if (data) {
-            // Deduplicate: Keep only the most recent visit for the list
             const unique = [];
             const seen = new Set();
             data.forEach(item => {
@@ -37,16 +35,11 @@ export default function MyPlaces() {
     fetchHistory();
   }, [user]);
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
+  if (loading) return <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-amber-500" /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4">
-      <div className="flex items-center gap-4 mb-6">
-        <ButtonBack onClick={() => navigate(-1)} />
-        <h1 className="text-xl font-bold">Places Visited</h1>
-      </div>
-
-      <div className="space-y-3">
+    <div className="space-y-3 mt-4 animate-in slide-in-from-top-4 fade-in duration-300">
+        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest px-1">Your Map</h3>
         {places.map((visit) => (
             <div 
                 key={visit.locations.id} 
@@ -58,22 +51,17 @@ export default function MyPlaces() {
                         <MapPin className="w-5 h-5 text-amber-500" />
                     </div>
                     <div>
-                        <h3 className="font-bold text-white">{visit.locations.name}</h3>
+                        <h3 className="font-bold text-white text-sm">{visit.locations.name}</h3>
                         <p className="text-xs text-slate-400 flex items-center gap-1">
                             <Calendar className="w-3 h-3" /> 
-                            Last: {new Date(visit.created_at).toLocaleDateString()}
+                            {new Date(visit.created_at).toLocaleDateString()}
                         </p>
                     </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-slate-600" />
+                <ChevronRight className="w-4 h-4 text-slate-600" />
             </div>
         ))}
-        {places.length === 0 && <p className="text-center text-slate-500 mt-10">No places visited yet.</p>}
-      </div>
+        {places.length === 0 && <p className="text-center text-slate-500 py-4 text-sm">No places visited yet.</p>}
     </div>
   );
 }
-
-const ButtonBack = ({ onClick }) => (
-    <button onClick={onClick} className="p-2 bg-slate-900 rounded-full text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></button>
-);
