@@ -13,15 +13,14 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let mounted = true;
 
-    // 1. Check active session immediately
+    // 1. Initial Load (Blocking Check)
+    // We want to wait for the profile check here so we don't flash the wrong screen.
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (mounted) {
-          if (session?.user) {
-            setUser(session.user);
-            await checkProfile(session.user.id);
-          }
+        if (mounted && session?.user) {
+          setUser(session.user);
+          await checkProfile(session.user.id);
         }
       } catch (error) {
         console.error("Session check failed:", error);
@@ -32,24 +31,23 @@ export const AuthProvider = ({ children }) => {
 
     checkSession();
 
-    // 2. Listen for auth changes (Login, Logout, Tab Switch)
+    // 2. Auth Listener (Non-Blocking Updates)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      // 🟢 FIX: Don't trigger loading on tab focus or token refresh if we already have a user
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
            setUser(session.user);
-           // Only check profile if we didn't have a user before
-           if (!user) await checkProfile(session.user.id); 
+           // 🟢 FIX: Run this in background! Do NOT await it.
+           // This prevents the "Loading..." hang when switching apps.
+           checkProfile(session.user.id); 
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfileMissing(false);
-        setLoading(false);
       }
       
-      // Ensure loading is turned off after any event is processed
+      // 🟢 FIX: Ensure loading is turned off immediately
       setLoading(false);
     });
 
@@ -61,12 +59,13 @@ export const AuthProvider = ({ children }) => {
 
   const checkProfile = async (userId) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('id')
         .eq('id', userId)
-        .maybeSingle(); // Use maybeSingle to avoid 406 errors on 0 rows
+        .maybeSingle();
       
+      // Only update state if it actually changes to prevent re-renders
       if (!data) setProfileMissing(true);
       else setProfileMissing(false);
     } catch (err) {
@@ -77,7 +76,6 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    // State updates handled by onAuthStateChange('SIGNED_OUT')
   };
 
   return (
