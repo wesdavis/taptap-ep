@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, Zap, Image as ImageIcon, LogOut, X, Plus, Crown, ShieldAlert, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, ArrowLeft, LogOut, X, Plus, Crown, ShieldAlert, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 YOUR API KEY
@@ -47,8 +47,9 @@ export default function ProfileSetup() {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error && error.code !== 'PGRST116') throw error; 
       if (data) {
+        // 🟢 FIX: Load 'display_name' if available, otherwise fallback to full_name
         setFormData({
-            full_name: data.full_name || '',
+            full_name: data.display_name || data.full_name || '',
             handle: data.handle || '',
             gender: data.gender || '',
             bio: data.bio || '',
@@ -132,6 +133,7 @@ export default function ProfileSetup() {
         const { error } = await supabase.from('profiles').upsert({
             id: user.id,
             full_name: formData.full_name,
+            display_name: formData.full_name, // 🟢 FIX: Update BOTH columns so they stay in sync
             handle: cleanHandle,
             gender: formData.gender,
             bio: formData.bio,
@@ -170,12 +172,11 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 NEW: FORCE CHECKOUT TOOL
+  // FORCE CHECKOUT TOOL
   const runGlobalCheckout = async () => {
       if (!confirm("⚠️ ADMIN: Force checkout for EVERYONE? The map will be empty.")) return;
       setEnriching(true);
       try {
-          // 'neq 0' is a trick to select all rows
           await supabase.from('checkins').update({ is_active: false }).neq('id', 0);
           toast.success("Dancefloor cleared! All users checked out.");
       } catch (e) { 
@@ -185,7 +186,7 @@ export default function ProfileSetup() {
       }
   }
 
-  // 🟢 NEW: RESET MY HISTORY
+  // RESET MY HISTORY
   const runResetMyGame = async () => {
       if (!confirm("Reset your Pings? You can meet people again.")) return;
       setEnriching(true);
@@ -199,14 +200,12 @@ export default function ProfileSetup() {
       }
   }
 
+  // Admin Helpers
   const runEnrichment = async () => { 
       if (!confirm("Admin: Fetch Data?")) return;
       setEnriching(true);
-      /* ... Keeping existing logic ... */
       try {
-        const { data: locs } = await supabase.from('locations').select('*');
-        // ... (Simplified for brevity, assuming you have this logic from before)
-        toast.success("Enrichment started (Check console for details)"); 
+        toast.success("Enrichment mock run"); 
       } catch(e) {}
       setEnriching(false);
   };
@@ -214,7 +213,7 @@ export default function ProfileSetup() {
   const runPhotoFetch = async () => { 
       if (!confirm("Admin: Fetch Photos?")) return;
       setEnriching(true);
-      toast.success("Photo fetch started"); 
+      toast.success("Photo fetch mock run"); 
       setEnriching(false);
   };
 
@@ -312,7 +311,7 @@ export default function ProfileSetup() {
                     </div>
                 </div>
 
-                {/* 🟢 NEW: DANGER ZONE TOOLS */}
+                {/* DANGER ZONE TOOLS */}
                 <div className="grid grid-cols-2 gap-3">
                     <Button variant="outline" onClick={runGlobalCheckout} disabled={enriching} className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-16 flex flex-col gap-1 text-xs">
                         <LogOut className="w-4 h-4" />
