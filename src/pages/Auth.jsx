@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '../lib/AuthContext'; // 🟢 Adjusted path (.. instead of @) just in case
+import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Zap, Lock, Mail, User, RotateCcw } from 'lucide-react'; 
+import { Zap, Lock, Mail, User, RotateCcw, Loader2 } from 'lucide-react'; 
 import { toast } from 'sonner';
 
 export default function Auth() {
-    const { loginWithPassword, signUp } = useAuth();
+    const { user } = useAuth();
     const navigate = useNavigate();
     
     const [isLogin, setIsLogin] = useState(true); 
@@ -18,6 +18,11 @@ export default function Auth() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
+
+    // 0. REDIRECT: If already logged in, go home
+    useEffect(() => {
+        if (user) navigate('/');
+    }, [user, navigate]);
 
     // 1. AUTO-CLEANUP: Wipe stale sessions immediately when loading this page
     useEffect(() => {
@@ -43,35 +48,48 @@ export default function Auth() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true); // Start "Processing..."
+        setLoading(true); 
 
         try {
-            if (isLogin) {
-                // 3. THE FIX: TIMEOUT PROTECTION
-                // If Supabase doesn't answer in 5 seconds, REJECT so the code stops waiting.
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error("Login timed out. Please click 'Reset App' below.")), 5000)
-                );
-                
-                // Race the Login against the 5-second Timer
-                await Promise.race([
-                    loginWithPassword(email, password),
-                    timeoutPromise
-                ]);
+            // 3. THE FIX: TIMEOUT PROTECTION
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Request timed out. Please click 'Reset App' below.")), 8000)
+            );
+            
+            // 4. THE LOGIC: Define the Supabase calls explicitly
+            const authAction = async () => {
+                if (isLogin) {
+                    const { error } = await supabase.auth.signInWithPassword({
+                        email, 
+                        password
+                    });
+                    if (error) throw error;
+                } else {
+                    if (!fullName) throw new Error("Please enter your name");
+                    const { error } = await supabase.auth.signUp({
+                        email, 
+                        password,
+                        options: {
+                            data: { full_name: fullName } // 🟢 Correctly save name
+                        }
+                    });
+                    if (error) throw error;
+                }
+            };
 
-                toast.success('Welcome back!');
-                navigate('/');
-            } else {
-                if (!fullName) throw new Error("Please enter your name");
-                await signUp(email, password, fullName);
-                toast.success('Account created!');
-                navigate('/profile-setup'); 
-            }
+            // Race the Login against the Timer
+            await Promise.race([
+                authAction(),
+                timeoutPromise
+            ]);
+
+            toast.success(isLogin ? 'Welcome back!' : 'Account created! Check email.');
+            // Navigation happens automatically via AuthContext listener
+
         } catch (error) {
             console.error(error);
             toast.error(error.message || 'Authentication failed');
         } finally {
-            // 4. CRITICAL: This ensures the button ALWAYS stops processing
             setLoading(false); 
         }
     };
@@ -141,7 +159,7 @@ export default function Auth() {
                         disabled={loading}
                         className="w-full h-12 mt-2 bg-gradient-to-r from-amber-500 to-orange-500 text-black font-semibold rounded-xl"
                     >
-                        {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
+                        {loading ? <Loader2 className="animate-spin" /> : (isLogin ? 'Sign In' : 'Sign Up')}
                     </Button>
                 </form>
 
@@ -153,7 +171,6 @@ export default function Auth() {
                         {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
                     </button>
 
-                    {/* NEW: TROUBLESHOOTING BUTTON */}
                     <button 
                         onClick={handleHardReset}
                         className="flex items-center justify-center gap-2 text-xs text-red-400/80 hover:text-red-400 transition-colors py-2"
