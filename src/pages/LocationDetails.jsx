@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Camera } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Camera, Crown } from 'lucide-react';
 import UserGrid from '../components/location/UserGrid'; 
 import { toast } from 'sonner';
 
@@ -25,7 +25,7 @@ const LocationDetails = () => {
     const fetchLocationData = async () => {
       try {
         setLoading(true);
-        // Get Location Info
+        // Get Location Info (Select * gets is_promoted too!)
         const { data: locData, error } = await supabase.from('locations').select('*').eq('id', id).single();
         if (error) throw error;
         setLocation(locData);
@@ -53,7 +53,7 @@ const LocationDetails = () => {
     fetchLocationData();
   }, [id, user]);
 
-  // 🟢 STRICT DISTANCE CALCULATOR
+  // STRICT DISTANCE CALCULATOR
   const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371; 
     const dLat = (lat2-lat1) * (Math.PI/180);
@@ -76,12 +76,10 @@ const LocationDetails = () => {
         return;
     }
 
-    // 🟢 1. GET GPS POSITION
     navigator.geolocation.getCurrentPosition(async (position) => {
         const userLat = position.coords.latitude;
         const userLon = position.coords.longitude;
         
-        // Debug Log (Open Console to see this if it fails)
         console.log(`User: ${userLat}, ${userLon} vs Venue: ${location.latitude}, ${location.longitude}`);
 
         const distKm = getDistanceFromLatLonInKm(userLat, userLon, location.latitude, location.longitude);
@@ -89,31 +87,24 @@ const LocationDetails = () => {
 
         console.log(`Calculated Distance: ${distMiles.toFixed(2)} miles`);
 
-        // 🟢 2. ENFORCE THE RULE (0.5 Miles)
         if (distMiles > 0.5) {
             toast.error(`Too far! You are ${distMiles.toFixed(1)} miles away.`);
             setCheckingLocation(false);
-            return; // Stop here!
+            return; 
         }
 
-        // 🟢 3. IF SAFE, CHECK IN
         try {
-            // Checkout of old places first
             await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
-            
             const { error } = await supabase.from('checkins').insert({
                 user_id: user.id,
                 location_id: id,
                 is_active: true
             });
-
             if (error) throw error;
-            
             setCheckedIn(true);
             setActiveCount(prev => prev + 1);
             setGridRefreshKey(prev => prev + 1);
             toast.success("You are checked in!");
-
         } catch (error) {
             toast.error("Check-in failed. Try again.");
         } finally {
@@ -142,7 +133,6 @@ const LocationDetails = () => {
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
   if (!location) return <div>Location not found</div>;
 
-  // Helper: Today's Hours
   let todayHours = "Open Daily";
   if (location.hours) {
     if (location.hours.includes('\n')) {
@@ -155,24 +145,34 @@ const LocationDetails = () => {
     }
   }
 
-  // Helper: Smart Image
   const heroImage = (location.google_photos && location.google_photos.length > 0)
     ? `https://places.googleapis.com/v1/${location.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=800&maxWidthPx=1200`
     : (location.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800");
 
+  const isPromoted = location.is_promoted;
+
   return (
-    <div className="min-h-screen bg-slate-950 pb-20">
+    <div className={`min-h-screen bg-slate-950 pb-20 ${isPromoted ? 'bg-amber-950/10' : ''}`}>
       
-      {/* Hero Image */}
-      <div className="relative h-72 w-full">
+      {/* 🟢 PROMOTED: Hero Glow Effect */}
+      <div className={`relative h-72 w-full ${isPromoted ? 'border-b-4 border-amber-500 shadow-[0_0_50px_rgba(245,158,11,0.3)]' : ''}`}>
         <img src={heroImage} alt={location.name} className="w-full h-full object-cover" />
         <button onClick={() => navigate('/')} className="absolute top-4 left-4 p-3 bg-black/60 backdrop-blur-md rounded-full text-white z-50">
           <ArrowLeft size={24} />
         </button>
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent pointer-events-none" />
         
         <div className="absolute bottom-0 left-0 p-6 w-full z-20">
-          <h1 className="text-3xl font-bold text-white mb-1">{location.name}</h1>
+          
+          {/* 🟢 PROMOTED: Crown Badge */}
+          {isPromoted && (
+              <div className="inline-flex items-center gap-1.5 bg-amber-500 text-black px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest mb-2 shadow-lg animate-in slide-in-from-left-4">
+                  <Crown className="w-4 h-4 fill-black" />
+                  Official Partner
+              </div>
+          )}
+
+          <h1 className={`text-3xl font-bold mb-1 ${isPromoted ? 'text-white drop-shadow-[0_2px_4px_rgba(245,158,11,0.5)]' : 'text-white'}`}>{location.name}</h1>
           <div className="flex items-center gap-2 mb-2">
              <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
              <span className="text-white font-bold">{location.google_rating || location.rating || 4.5}</span>
@@ -180,7 +180,7 @@ const LocationDetails = () => {
           </div>
           
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-amber-500 text-black text-xs font-bold rounded-full uppercase">{location.type}</span>
+            <span className="px-3 py-1 bg-slate-800/80 backdrop-blur-md text-amber-500 text-xs font-bold rounded-full uppercase border border-slate-700">{location.type}</span>
             <span className="text-green-400 text-sm font-bold tracking-widest">{location.price_level || '$$'}</span>
             <div className="flex items-center gap-1.5 text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20 ml-auto">
               <span className={`w-2 h-2 rounded-full bg-green-500 ${activeCount > 0 ? 'animate-pulse' : ''}`}></span>
@@ -191,8 +191,8 @@ const LocationDetails = () => {
       </div>
 
       <div className="p-6 space-y-6">
-        {/* Info Card */}
-        <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
+        {/* Info Card - 🟢 PROMOTED: Gold Border */}
+        <div className={`bg-slate-900/50 p-5 rounded-2xl border space-y-4 shadow-xl ${isPromoted ? 'border-amber-500/50 shadow-amber-500/10' : 'border-slate-800'}`}>
           <div className="flex items-center justify-between">
              <div className="flex items-center gap-3 text-slate-300">
                 <Clock className="text-amber-500 w-5 h-5 shrink-0" />
@@ -246,13 +246,17 @@ const LocationDetails = () => {
           </div>
         )}
 
-        {/* Check In Button */}
+        {/* Check In Button - 🟢 PROMOTED: Gold Button */}
         <div className="w-full">
             {!checkedIn ? (
                 <button 
                     onClick={handleCheckIn}
                     disabled={checkingLocation}
-                    className="w-full py-4 font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 active:scale-95 disabled:opacity-50"
+                    className={`w-full py-4 font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2 text-black active:scale-95 disabled:opacity-50 ${
+                        isPromoted 
+                        ? "bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 shadow-amber-500/20"
+                        : "bg-amber-500 hover:bg-amber-400 shadow-amber-500/20"
+                    }`}
                 >
                     {checkingLocation ? <Loader2 className="animate-spin w-5 h-5" /> : <Navigation size={20} className="fill-black" />}
                     {checkingLocation ? "Verifying GPS..." : "Check In Here"}
