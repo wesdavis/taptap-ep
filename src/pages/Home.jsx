@@ -168,7 +168,7 @@ const Home = () => {
   // 🟢 NEW: Smarter Promo Logic (Case Insensitive)
   // 1. Find the promoted spot loosely (ignores capitalization or extra spaces)
   const promotedLocation = sortedLocations.find(l => 
-    l.name.toLowerCase().trim() === PROMOTED_VENUE_NAME.toLowerCase().trim()
+    l.name.toLowerCase().trim() === PROMOTED_VENUE_NAME = "Coffee Box".toLowerCase().trim()
   );
 
   // 2. Filter it out of the main list so it doesn't appear twice
