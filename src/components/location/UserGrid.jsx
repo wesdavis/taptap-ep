@@ -59,19 +59,32 @@ export default function UserGrid({ locationId }) {
             
             if (error) throw error;
             if (data) {
-                // FIX: Removed the filter so you can SEE YOURSELF in the grid
                 setUsers(data.filter(u => u.profiles));
             }
         } catch (e) { console.log("Grid fetch error:", e); }
     }
 
+    // 🟢 ISSUE 2 FIX: Only fetch pings from THIS SESSION
     async function fetchMySentPings() {
         if (!user) return;
+        
+        // 1. Get my current active check-in time
+        const { data: checkin } = await supabase
+            .from('checkins')
+            .select('created_at')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+        if (!checkin) return; 
+
+        // 2. Get pings sent AFTER I checked in
         const { data } = await supabase
             .from('pings')
             .select('to_user_id')
             .eq('from_user_id', user.id)
-            .eq('location_id', locationId);
+            .eq('location_id', locationId)
+            .gt('created_at', checkin.created_at); 
             
         if (data) {
             const pingedIds = new Set(data.map(p => p.to_user_id));

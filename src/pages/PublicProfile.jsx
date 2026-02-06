@@ -5,13 +5,11 @@ import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Zap, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Zap, Check, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PublicProfile() {
     const params = useParams();
-    // 🟢 CRITICAL FIX: Define 'userId' here so the rest of the file can use it.
-    // This checks for EITHER 'userId' (CamelCase) OR 'userid' (lowercase)
     const userId = params.userId || params.userid;
 
     const { user } = useAuth();
@@ -21,17 +19,15 @@ export default function PublicProfile() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState(null);
     const [myGender, setMyGender] = useState(null);
-    const [myLiveLocation, setMyLiveLocation] = useState(null); 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // 🟢 NEW: Full Screen Photo State
+    const [selectedPhoto, setSelectedPhoto] = useState(null);
 
     useEffect(() => {
-        // Debugging logs
-        console.log("Looking for User ID:", userId);
-
         if (user && userId && userId !== "undefined") {
             loadUniversalData();
         } else if (!userId || userId === "undefined") {
-            console.error("Error: userId is missing from URL parameters.");
             setLoading(false);
         }
     }, [user, userId]);
@@ -42,7 +38,7 @@ export default function PublicProfile() {
             const { data: profileData, error } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('id', userId) // Now this variable definitely exists!
+                .eq('id', userId)
                 .single();
             
             if (error) throw error;
@@ -56,27 +52,27 @@ export default function PublicProfile() {
                 .single();
             setMyGender(myProfile?.gender);
 
-            // 3. Check MY Location
+            // 3. 🟢 ISSUE 2 FIX: Check Status (Scoped to Current Session)
             const { data: myCheckin } = await supabase
                 .from('checkins')
-                .select('location_id')
+                .select('location_id, created_at')
                 .eq('user_id', user.id)
                 .eq('is_active', true)
                 .maybeSingle();
 
             if (myCheckin) {
-                setMyLiveLocation(myCheckin.location_id);
+                // Only check for pings sent AFTER I checked in
+                const { data: ping } = await supabase
+                    .from('pings')
+                    .select('status')
+                    .eq('from_user_id', user.id)
+                    .eq('to_user_id', userId)
+                    .eq('location_id', myCheckin.location_id) // Match location
+                    .gt('created_at', myCheckin.created_at)   // Match time
+                    .maybeSingle();
+
+                if (ping) setStatus(ping.status || 'pending');
             }
-
-            // 4. Check Status
-            const { data: ping } = await supabase
-                .from('pings')
-                .select('status')
-                .eq('from_user_id', user.id)
-                .eq('to_user_id', userId)
-                .maybeSingle();
-
-            if (ping) setStatus(ping.status || 'pending');
 
         } catch (error) {
             console.error("Error loading profile:", error);
@@ -86,44 +82,42 @@ export default function PublicProfile() {
     }
 
     const handleUniversalTap = async () => {
-    // 1. Fetch my current active check-in
-    const { data: myCheckin } = await supabase
-        .from('checkins')
-        .select('location_id')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
+        const { data: myCheckin } = await supabase
+            .from('checkins')
+            .select('location_id')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle();
 
-    // 2. Fetch the target user's current active check-in
-    const { data: targetCheckin } = await supabase
-        .from('checkins')
-        .select('location_id')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .maybeSingle();
+        const { data: targetCheckin } = await supabase
+            .from('checkins')
+            .select('location_id')
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .maybeSingle();
 
-    if (!myCheckin || !targetCheckin || String(myCheckin.location_id) !== String(targetCheckin.location_id)) {
-        toast.error("You must be at the same venue to tap!");
-        return;
-    }
+        if (!myCheckin || !targetCheckin || String(myCheckin.location_id) !== String(targetCheckin.location_id)) {
+            toast.error("You must be at the same venue to tap!");
+            return;
+        }
 
-    setIsSubmitting(true);
-    try {
-        const { error } = await supabase.from('pings').insert({
-            from_user_id: user.id,
-            to_user_id: userId,
-            location_id: myCheckin.location_id,
-            status: 'pending'
-        });
-        if (error) throw error;
-        setStatus('pending');
-        toast.success(`You tapped ${profile.full_name}!`);
-    } catch (error) {
-        toast.error("Tap failed.");
-    } finally {
-        setIsSubmitting(false);
-    }
-};
+        setIsSubmitting(true);
+        try {
+            const { error } = await supabase.from('pings').insert({
+                from_user_id: user.id,
+                to_user_id: userId,
+                location_id: myCheckin.location_id,
+                status: 'pending'
+            });
+            if (error) throw error;
+            setStatus('pending');
+            toast.success(`You tapped ${profile.full_name}!`);
+        } catch (error) {
+            toast.error("Tap failed.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     if (loading) return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
@@ -134,6 +128,8 @@ export default function PublicProfile() {
     if (!profile) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">User not found</div>;
 
     const isFemale = (myGender || '').toLowerCase() === 'female';
+    // 🟢 Use the new photos array, or fallback to avatar
+    const photos = (profile.photos && profile.photos.length > 0) ? profile.photos : [profile.avatar_url];
 
     return (
         <div className="min-h-screen bg-slate-950 text-white p-4 pb-32">
@@ -145,10 +141,27 @@ export default function PublicProfile() {
             </div>
 
             <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
-                <Avatar className="w-32 h-32 border-4 border-amber-500/20 mb-4 shadow-2xl">
-                    <AvatarImage src={profile.avatar_url} />
-                    <AvatarFallback className="text-4xl bg-slate-800">{profile.full_name?.[0]}</AvatarFallback>
-                </Avatar>
+                
+                {/* 🟢 NEW: PHOTO GALLERY (Click to Expand) */}
+                <div className="w-full max-w-sm mb-6 grid grid-cols-2 gap-2">
+                    {/* Main Photo (Big) */}
+                    <div 
+                        className="col-span-2 aspect-square rounded-2xl overflow-hidden border-2 border-slate-800 shadow-2xl cursor-pointer"
+                        onClick={() => setSelectedPhoto(photos[0])}
+                    >
+                        <img src={photos[0]} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                    </div>
+                    {/* Smaller Photos */}
+                    {photos.slice(1, 3).map((photo, i) => (
+                         <div 
+                            key={i} 
+                            className="aspect-square rounded-xl overflow-hidden border border-slate-800 cursor-pointer"
+                            onClick={() => setSelectedPhoto(photo)}
+                        >
+                            <img src={photo} className="w-full h-full object-cover hover:opacity-80 transition" />
+                        </div>
+                    ))}
+                </div>
 
                 <h2 className="text-3xl font-bold mb-2 text-center">{profile.full_name}</h2>
                 
@@ -167,7 +180,6 @@ export default function PublicProfile() {
                     </Badge>
                 </div>
 
-                {/* Show Tap Button ONLY if I am Female and haven't tapped yet */}
                 {isFemale && status === null && (
                     <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
                         <Button 
@@ -175,18 +187,11 @@ export default function PublicProfile() {
                             className="w-full h-14 text-lg font-bold bg-amber-500 hover:bg-amber-600 text-black shadow-lg shadow-amber-900/20 rounded-2xl animate-in slide-in-from-bottom-4 disabled:opacity-50"
                             onClick={handleUniversalTap}
                         >
-                            {isSubmitting ? (
-                                <Loader2 className="w-5 h-5 animate-spin mr-2" /> 
-                            ) : (
-                                <>
-                                    <Zap className="w-5 h-5 mr-2 fill-black" /> TAP TO CONNECT
-                                </>
-                            )}
+                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <><Zap className="w-5 h-5 mr-2 fill-black" /> TAP TO CONNECT</>}
                         </Button>
                     </div>
                 )}
 
-                {/* Show "Sent" button if already pending */}
                 {isFemale && status === 'pending' && (
                     <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
                         <Button disabled className="w-full h-14 text-lg font-bold bg-slate-800 text-slate-400 border border-slate-700 rounded-2xl">
@@ -195,6 +200,23 @@ export default function PublicProfile() {
                     </div>
                 )}
             </div>
+
+            {/* 🟢 FULL SCREEN LIGHTBOX */}
+            {selectedPhoto && (
+                <div 
+                    className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setSelectedPhoto(null)}
+                >
+                    <button className="absolute top-6 right-6 text-white/50 hover:text-white p-2">
+                        <X className="w-8 h-8" />
+                    </button>
+                    <img 
+                        src={selectedPhoto} 
+                        className="max-w-full max-h-[85vh] rounded-xl shadow-2xl object-contain" 
+                        onClick={(e) => e.stopPropagation()} 
+                    />
+                </div>
+            )}
         </div>
     );
 }
