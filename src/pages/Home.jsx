@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
-import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Eye } from 'lucide-react';
+import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Eye, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 API KEY
@@ -156,45 +156,55 @@ const Home = () => {
       <div className="bg-slate-900 border-b border-slate-800 p-6 rounded-b-3xl shadow-2xl mb-6 relative overflow-hidden">
         
         {/* Background Blur Effect */}
-        <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
+        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
 
-        {/* 🟢 NEW: FRONT & CENTER PROFILE */}
+        {/* 🟢 NEW: FRONT & CENTER PROFILE (Beveled & Larger) */}
         <div className="flex flex-col items-center relative z-10 pt-4">
+            
+            {/* The Avatar Token */}
             <div 
                 onClick={() => navigate(`/user/${user?.id}`)} 
-                className="relative w-24 h-24 rounded-full border-4 border-slate-800 shadow-xl cursor-pointer group hover:scale-105 transition-transform"
+                className="relative w-32 h-32 rounded-full cursor-pointer group hover:scale-105 transition-transform duration-300"
             >
-                {/* 🟢 Avatar Image (Uses First Photo) */}
-                {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} className="w-full h-full object-cover rounded-full" />
-                ) : (
-                    <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-full"><User className="text-slate-500" /></div>
-                )}
+                {/* 1. The Outer Glow/Ring */}
+                <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-amber-600 to-amber-300 opacity-70 blur-sm group-hover:opacity-100 transition-opacity"></div>
                 
-                {/* "View Profile" Icon Badge */}
-                <div className="absolute bottom-0 right-0 bg-amber-500 text-black p-1.5 rounded-full border-2 border-slate-900 shadow-sm">
-                    <Eye className="w-3 h-3" />
+                {/* 2. The Bevel Container */}
+                <div className="relative w-full h-full rounded-full border-4 border-slate-900 shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)] overflow-hidden bg-slate-800">
+                     {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center"><User className="text-slate-500 w-12 h-12" /></div>
+                    )}
+                </div>
+
+                {/* 3. The "View" Badge */}
+                <div className="absolute bottom-1 right-1 bg-amber-500 text-black p-2 rounded-full border-4 border-slate-900 shadow-lg">
+                    <Eye className="w-4 h-4 fill-black" />
                 </div>
             </div>
 
-            <div className="text-center mt-3">
-                <h1 className="text-2xl font-bold text-white tracking-tight">{profile?.display_name || "Explorer"}</h1>
-                <p className="text-amber-500 text-sm font-medium">@{profile?.handle || "user"}</p>
+            {/* Name & Handle */}
+            <div className="text-center mt-4 space-y-1">
+                <h1 className="text-3xl font-black text-white tracking-tight drop-shadow-md">{profile?.display_name || "Explorer"}</h1>
+                <p className="text-amber-500 text-sm font-bold tracking-wide">@{profile?.handle || "user"}</p>
             </div>
 
-            {/* Stats Row */}
-            <div className="flex gap-4 mt-4">
-                <div className="bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700/50 flex flex-col items-center min-w-[80px]">
-                    <span className="text-xl font-bold text-white">{profile?.xp || 0}</span>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">XP</span>
+            {/* Action Bar */}
+            <div className="flex items-center gap-3 mt-5">
+                {/* XP Pill */}
+                <div className="bg-slate-800/80 px-4 py-2 rounded-full border border-slate-700/50 flex items-center gap-2 backdrop-blur-md">
+                    <Trophy className="w-4 h-4 text-yellow-500" />
+                    <span className="text-sm font-bold text-white">{profile?.xp || 0} XP</span>
                 </div>
-                {/* Edit Profile Button (Small) */}
+                
+                {/* Edit Button */}
                 <button 
-                    onClick={() => navigate('/profile-setup')}
-                    className="bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700/50 flex flex-col items-center justify-center min-w-[80px] hover:bg-slate-700 transition"
+                    onClick={(e) => { e.stopPropagation(); navigate('/profile-setup'); }}
+                    className="bg-slate-800/80 px-4 py-2 rounded-full border border-slate-700/50 flex items-center gap-2 backdrop-blur-md hover:bg-slate-700 transition"
                 >
-                    <Settings className="w-5 h-5 text-slate-400 mb-0.5" />
-                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Edit</span>
+                    <Edit3 className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm font-bold text-slate-400">Edit</span>
                 </button>
             </div>
         </div>
