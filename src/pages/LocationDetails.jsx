@@ -6,6 +6,7 @@ import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigati
 import UserGrid from '../components/location/UserGrid'; 
 import { toast } from 'sonner';
 
+// 🟢 API KEY
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
 const LocationDetails = () => {
@@ -17,23 +18,26 @@ const LocationDetails = () => {
   const [activeCount, setActiveCount] = useState(0); 
   const [checkedIn, setCheckedIn] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [checkingLocation, setCheckingLocation] = useState(false); // 🟢 Added state
+  const [checkingLocation, setCheckingLocation] = useState(false);
   const [gridRefreshKey, setGridRefreshKey] = useState(0);
 
   useEffect(() => {
     const fetchLocationData = async () => {
       try {
         setLoading(true);
+        // Get Location Info
         const { data: locData, error } = await supabase.from('locations').select('*').eq('id', id).single();
         if (error) throw error;
         setLocation(locData);
 
+        // Get Check-in Count
         const { count } = await supabase.from('checkins')
           .select('*', { count: 'exact', head: true })
           .eq('location_id', id)
           .eq('is_active', true);
         setActiveCount(count || 0);
 
+        // Check if I am checked in
         if (user) {
            const { data: myCheckin } = await supabase.from('checkins')
              .select('*')
@@ -49,7 +53,7 @@ const LocationDetails = () => {
     fetchLocationData();
   }, [id, user]);
 
-  // 🟢 STRICT DISTANCE CHECK
+  // 🟢 STRICT DISTANCE CALCULATOR
   const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371; 
     const dLat = (lat2-lat1) * (Math.PI/180);
@@ -57,14 +61,14 @@ const LocationDetails = () => {
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c; // Distance in KM
+    return R * c; 
   };
 
   const handleCheckIn = async () => {
     if (!user) return navigate('/auth');
     if (checkedIn) return;
 
-    setCheckingLocation(true); // Show loader on button
+    setCheckingLocation(true);
 
     if (!navigator.geolocation) {
         toast.error("Geolocation is not supported by your browser");
@@ -72,39 +76,44 @@ const LocationDetails = () => {
         return;
     }
 
+    // 🟢 1. GET GPS POSITION
     navigator.geolocation.getCurrentPosition(async (position) => {
         const userLat = position.coords.latitude;
         const userLon = position.coords.longitude;
         
-        // Debugging logs (Check console if it fails!)
-        console.log(`User: ${userLat}, ${userLon}`);
-        console.log(`Venue: ${location.latitude}, ${location.longitude}`);
+        // Debug Log (Open Console to see this if it fails)
+        console.log(`User: ${userLat}, ${userLon} vs Venue: ${location.latitude}, ${location.longitude}`);
 
         const distKm = getDistanceFromLatLonInKm(userLat, userLon, location.latitude, location.longitude);
         const distMiles = distKm * 0.621371;
 
-        console.log(`Distance: ${distMiles.toFixed(2)} miles`);
+        console.log(`Calculated Distance: ${distMiles.toFixed(2)} miles`);
 
-        // 🟢 THE RULE: Must be within 0.5 miles
+        // 🟢 2. ENFORCE THE RULE (0.5 Miles)
         if (distMiles > 0.5) {
             toast.error(`Too far! You are ${distMiles.toFixed(1)} miles away.`);
             setCheckingLocation(false);
-            return;
+            return; // Stop here!
         }
 
-        // If close enough, proceed to DB
+        // 🟢 3. IF SAFE, CHECK IN
         try {
+            // Checkout of old places first
             await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
+            
             const { error } = await supabase.from('checkins').insert({
                 user_id: user.id,
                 location_id: id,
                 is_active: true
             });
+
             if (error) throw error;
+            
             setCheckedIn(true);
             setActiveCount(prev => prev + 1);
             setGridRefreshKey(prev => prev + 1);
             toast.success("You are checked in!");
+
         } catch (error) {
             toast.error("Check-in failed. Try again.");
         } finally {
@@ -112,7 +121,7 @@ const LocationDetails = () => {
         }
     }, (error) => {
         console.error("Geo Error:", error);
-        toast.error("Could not get your location. Please enable GPS.");
+        toast.error("Could not get your location. Enable GPS.");
         setCheckingLocation(false);
     });
   };
@@ -133,6 +142,7 @@ const LocationDetails = () => {
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
   if (!location) return <div>Location not found</div>;
 
+  // Helper: Today's Hours
   let todayHours = "Open Daily";
   if (location.hours) {
     if (location.hours.includes('\n')) {
@@ -145,22 +155,22 @@ const LocationDetails = () => {
     }
   }
 
+  // Helper: Smart Image
+  const heroImage = (location.google_photos && location.google_photos.length > 0)
+    ? `https://places.googleapis.com/v1/${location.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=800&maxWidthPx=1200`
+    : (location.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800");
+
   return (
     <div className="min-h-screen bg-slate-950 pb-20">
+      
+      {/* Hero Image */}
       <div className="relative h-72 w-full">
-        <img 
-            src={
-              (location.google_photos && location.google_photos.length > 0)
-                ? `https://places.googleapis.com/v1/${location.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=800&maxWidthPx=1200`
-                : (location.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800")
-            }
-            alt={location.name} 
-            className="w-full h-full object-cover" 
-        />
+        <img src={heroImage} alt={location.name} className="w-full h-full object-cover" />
         <button onClick={() => navigate('/')} className="absolute top-4 left-4 p-3 bg-black/60 backdrop-blur-md rounded-full text-white z-50">
           <ArrowLeft size={24} />
         </button>
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent pointer-events-none" />
+        
         <div className="absolute bottom-0 left-0 p-6 w-full z-20">
           <h1 className="text-3xl font-bold text-white mb-1">{location.name}</h1>
           <div className="flex items-center gap-2 mb-2">
@@ -168,6 +178,7 @@ const LocationDetails = () => {
              <span className="text-white font-bold">{location.google_rating || location.rating || 4.5}</span>
              <span className="text-slate-400 text-sm">({location.google_user_ratings_total || 100} reviews)</span>
           </div>
+          
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-amber-500 text-black text-xs font-bold rounded-full uppercase">{location.type}</span>
             <span className="text-green-400 text-sm font-bold tracking-widest">{location.price_level || '$$'}</span>
@@ -178,7 +189,9 @@ const LocationDetails = () => {
           </div>
         </div>
       </div>
+
       <div className="p-6 space-y-6">
+        {/* Info Card */}
         <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
              <div className="flex items-center gap-3 text-slate-300">
@@ -190,11 +203,14 @@ const LocationDetails = () => {
              </div>
              {location.hours && <ChevronRight className="w-5 h-5 text-slate-600" />}
           </div>
+          
           <div className="h-px bg-slate-800 w-full" />
+
           <div className="flex items-start gap-3 text-slate-300">
             <MapPin className="text-amber-500 w-5 h-5 shrink-0 mt-0.5" />
             <span className="text-sm">{location.address || "Address loading..."}</span>
           </div>
+          
           <div className="grid grid-cols-2 gap-3 pt-2">
             {location.website && (
                 <a href={location.website} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700">
@@ -208,6 +224,8 @@ const LocationDetails = () => {
             )}
           </div>
         </div>
+
+        {/* Photos */}
         {location.google_photos && location.google_photos.length > 0 && (
           <div>
             <h3 className="text-white font-bold mb-3 flex items-center gap-2">
@@ -227,6 +245,8 @@ const LocationDetails = () => {
             </div>
           </div>
         )}
+
+        {/* Check In Button */}
         <div className="w-full">
             {!checkedIn ? (
                 <button 
@@ -251,6 +271,8 @@ const LocationDetails = () => {
                 </div>
             )}
         </div>
+
+        {/* Map */}
         {location.google_place_id && (
           <div className="rounded-xl overflow-hidden border border-slate-800 h-40 w-full opacity-80 hover:opacity-100 transition">
             <iframe
@@ -259,9 +281,11 @@ const LocationDetails = () => {
             ></iframe>
           </div>
         )}
+
         <div className="border-t border-slate-800 pt-6">
           <UserGrid locationId={id} key={gridRefreshKey} />
         </div>
+
         <p className="text-slate-400 text-sm leading-relaxed text-center px-4 pb-4">
             {location.description || "Join the local scene at this venue."}
         </p>
