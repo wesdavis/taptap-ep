@@ -165,9 +165,17 @@ const Home = () => {
     });
   }, [locations, userCoords, sortBy]);
 
-  // 🟢 NEW: Split List into Promoted vs Others
-  const promotedLocation = sortedLocations.find(l => l.name === PROMOTED_VENUE_NAME);
-  const otherLocations = sortedLocations.filter(l => l.name !== PROMOTED_VENUE_NAME);
+  // 🟢 NEW: Smarter Promo Logic (Case Insensitive)
+  // 1. Find the promoted spot loosely (ignores capitalization or extra spaces)
+  const promotedLocation = sortedLocations.find(l => 
+    l.name.toLowerCase().trim() === PROMOTED_VENUE_NAME.toLowerCase().trim()
+  );
+
+  // 2. Filter it out of the main list so it doesn't appear twice
+  // If we didn't find a promoted spot, just show the whole list normally.
+  const otherLocations = promotedLocation 
+    ? sortedLocations.filter(l => l.id !== promotedLocation.id)
+    : sortedLocations;
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500">Loading...</div>;
 
