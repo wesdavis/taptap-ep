@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
-import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown } from 'lucide-react';
+import PeopleMetList from '../components/notifications/PeopleMetList'; // 🟢 Restored
+import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 API KEY
@@ -39,7 +40,8 @@ const Home = () => {
   const [currentCity, setCurrentCity] = useState("El Paso"); 
   
   const [currentCheckIn, setCurrentCheckIn] = useState(null); 
-  const [activeUsersAtLocation, setActiveUsersAtLocation] = useState([]);
+  const [activeUsersAtLocation, setActiveUsersAtLocation] = useState({}); // Changed to object map for quick lookup
+  const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 }); // 🟢 New Stats
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -48,7 +50,6 @@ const Home = () => {
         const lng = position.coords.longitude;
         setUserCoords({ latitude: lat, longitude: lng });
 
-        // Reverse Geocode to get City Name
         try {
             const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`);
             const data = await res.json();
@@ -72,6 +73,7 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
+          // Get Pings
           const { data: sentData } = await supabase
             .from('pings')
             .select(`*, receiver:profiles!to_user_id(*)`) 
@@ -88,6 +90,7 @@ const Home = () => {
             .order('created_at', { ascending: false });
           setMysteryPings(receivedData || []);
 
+          // Get Checkin
           const { data: myCheckIn } = await supabase
             .from('checkins')
             .select(`*, locations (*)`)
@@ -96,14 +99,34 @@ const Home = () => {
             .maybeSingle();
           setCurrentCheckIn(myCheckIn);
 
-          if (myCheckIn) {
-            const { data: people } = await supabase
-                .from('checkins')
-                .select(`user_id, profiles:user_id ( id, display_name, avatar_url, handle )`)
-                .eq('location_id', myCheckIn.location_id)
-                .eq('is_active', true);
-            setActiveUsersAtLocation(people?.filter(p => p.user_id !== user.id) || []);
-          }
+          // 🟢 GET LIVE CHECKIN COUNTS (For Party Meter)
+          const { data: allCheckins } = await supabase
+            .from('checkins')
+            .select('location_id')
+            .eq('is_active', true);
+          
+          const counts = {};
+          allCheckins?.forEach(c => {
+              counts[c.location_id] = (counts[c.location_id] || 0) + 1;
+          });
+          setActiveUsersAtLocation(counts);
+
+          // 🟢 GET USER STATS (People Met & Places)
+          const { count: visitedCount } = await supabase
+            .from('checkins')
+            .select('location_id', { count: 'exact', head: true })
+            .eq('user_id', user.id); // Total checkins (simplification for "places visited")
+
+          const { count: metCount } = await supabase
+            .from('pings')
+            .select('id', { count: 'exact', head: true })
+            .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`)
+            .eq('status', 'accepted'); // Only counted if accepted
+
+          setStats({
+              peopleMet: metCount || 0,
+              placesVisited: visitedCount || 0
+          });
         }
 
         const { data: locData } = await supabase.from('locations').select('*');
@@ -120,7 +143,6 @@ const Home = () => {
     try {
         await supabase.from('checkins').update({ is_active: false }).eq('id', checkinId);
         setCurrentCheckIn(null);
-        setActiveUsersAtLocation([]);
     } catch (error) { console.error(error); }
   };
 
@@ -149,6 +171,14 @@ const Home = () => {
     }
   };
 
+  // 🟢 Helper: Determine "Party Meter" Level
+  const getPartyVibe = (count) => {
+      if (count >= 10) return { label: "PACKED 🚨", color: "text-red-500 bg-red-500/10 border-red-500/20" };
+      if (count >= 6) return { label: "BUSY 🔥", color: "text-orange-500 bg-orange-500/10 border-orange-500/20" };
+      if (count >= 3) return { label: "LIVELY 🥂", color: "text-green-500 bg-green-500/10 border-green-500/20" };
+      return { label: "CHILL 🌙", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" };
+  };
+
   const sortedLocations = useMemo(() => {
     const mapped = locations.map(loc => {
       const dist = userCoords ? calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude) : Infinity;
@@ -161,11 +191,8 @@ const Home = () => {
     });
   }, [locations, userCoords, sortBy]);
 
-  // 🟢 NEW: Database-Driven Promo Logic (No more hardcoding names!)
-  // It simply looks for the row where is_promoted === true
   const promotedLocation = sortedLocations.find(l => l.is_promoted === true);
   
-  // Filter the promoted spot out of the main list so it doesn't show twice
   const otherLocations = promotedLocation 
     ? sortedLocations.filter(l => l.id !== promotedLocation.id)
     : sortedLocations;
@@ -253,24 +280,9 @@ const Home = () => {
                     </div>
                     <button onClick={handleCheckOut} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition"><LogOut className="w-5 h-5" /></button>
                 </div>
-                {activeUsersAtLocation.length > 0 ? (
-                    <div>
-                        <p className="text-slate-400 text-xs font-bold uppercase mb-3">Who's Here</p>
-                        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                            {activeUsersAtLocation.map((person) => (
-                                <div key={person.user_id} onClick={() => navigate(`/user/${person.user_id}`)} className="flex flex-col items-center gap-2 shrink-0 cursor-pointer group">
-                                    <div className="w-20 h-20 rounded-full border-2 border-slate-700 group-hover:border-amber-500 transition p-0.5 relative">
-                                        <img src={person.profiles?.avatar_url} className="w-full h-full object-cover rounded-full bg-slate-800" />
-                                        <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-slate-900 rounded-full"></div>
-                                    </div>
-                                    <span className="text-xs font-medium text-slate-300 max-w-[80px] truncate text-center">{person.profiles?.display_name?.split(' ')[0] || "User"}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="text-slate-500 text-sm italic bg-black/20 p-4 rounded-xl text-center border border-white/5">You're the first one here! <br/><span className="text-xs">Wait for others to join...</span></div>
-                )}
+                <div className="text-slate-500 text-sm italic bg-black/20 p-4 rounded-xl text-center border border-white/5">
+                    You're checked in!
+                </div>
             </div>
         </div>
       )}
@@ -289,7 +301,7 @@ const Home = () => {
       
       <div className="px-4 space-y-3">
         
-        {/* PROMOTED SLOT (Active if DB is_promoted = true) */}
+        {/* PROMOTED SLOT */}
         {promotedLocation && (
             <div 
                 key={promotedLocation.id} 
@@ -312,7 +324,16 @@ const Home = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
-                            <span className="px-2 py-0.5 bg-slate-800 rounded text-amber-500 uppercase font-bold text-[10px]">{promotedLocation.type}</span>
+                            {/* 🟢 PARTY METER (Promoted) */}
+                            {(() => {
+                                const count = activeUsersAtLocation[promotedLocation.id] || 0;
+                                const vibe = getPartyVibe(count);
+                                return (
+                                    <span className={`px-1.5 py-0.5 rounded border ${vibe.color} font-bold text-[9px] uppercase`}>
+                                        {vibe.label}
+                                    </span>
+                                );
+                            })()}
                             <span className="text-green-400">{promotedLocation.price_level}</span>
                             <span>•</span>
                             <span>{promotedLocation._distance < 100 ? `${promotedLocation._distance.toFixed(1)} mi` : 'Far away'}</span>
@@ -341,6 +362,9 @@ const Home = () => {
                 ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`
                 : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");
 
+            const count = activeUsersAtLocation[loc.id] || 0;
+            const vibe = getPartyVibe(count);
+
             return (
               <div key={loc.id} onClick={() => navigate(`/location/${loc.id}`)} className="flex items-center justify-between bg-slate-900/50 border border-slate-800 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer">
                 <div className="flex-1 min-w-0 pr-4">
@@ -352,8 +376,11 @@ const Home = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
+                    {/* 🟢 PARTY METER (Standard) */}
+                    <span className={`px-1.5 py-0.5 rounded border ${vibe.color} font-bold text-[9px] uppercase`}>
+                        {vibe.label}
+                    </span>
                     <span className="px-2 py-0.5 bg-slate-800 rounded text-amber-500 uppercase font-bold text-[10px]">{loc.type}</span>
-                    {loc.price_level && <span className="text-green-400">{loc.price_level}</span>}
                     <span>•</span>
                     <span>{loc._distance < 100 ? `${loc._distance.toFixed(1)} mi` : 'Far away'}</span>
                   </div>
@@ -367,6 +394,35 @@ const Home = () => {
             );
         })}
       </div>
+
+      {/* 🟢 SEPARATOR */}
+      <div className="px-4 py-6">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
+      </div>
+
+      {/* 🟢 PEOPLE MET LIST (Restored) */}
+      <div className="px-4 space-y-4">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+              <Users className="w-5 h-5 text-amber-500" /> 
+              Recent Connections
+          </h2>
+          <PeopleMetList />
+      </div>
+
+      {/* 🟢 LIFE STATS (Footer) */}
+      <div className="mt-8 mx-4 p-4 bg-slate-900 border border-slate-800 rounded-2xl grid grid-cols-2 gap-4 text-center">
+          <div className="space-y-1">
+              <div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div>
+              <div className="text-2xl font-black text-white">{stats.peopleMet}</div>
+              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div>
+          </div>
+          <div className="space-y-1 border-l border-slate-800">
+              <div className="flex justify-center text-green-500 mb-1"><MapIcon className="w-6 h-6" /></div>
+              <div className="text-2xl font-black text-white">{stats.placesVisited}</div>
+              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Places Visited</div>
+          </div>
+      </div>
+
     </div>
   );
 };
