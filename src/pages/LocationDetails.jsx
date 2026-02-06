@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Camera, Crown } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Camera, Crown, Calendar } from 'lucide-react';
 import UserGrid from '../components/location/UserGrid'; 
 import { toast } from 'sonner';
 
@@ -25,7 +25,7 @@ const LocationDetails = () => {
     const fetchLocationData = async () => {
       try {
         setLoading(true);
-        // Get Location Info (Select * gets is_promoted too!)
+        // Get Location Info
         const { data: locData, error } = await supabase.from('locations').select('*').eq('id', id).single();
         if (error) throw error;
         setLocation(locData);
@@ -80,12 +80,8 @@ const LocationDetails = () => {
         const userLat = position.coords.latitude;
         const userLon = position.coords.longitude;
         
-        console.log(`User: ${userLat}, ${userLon} vs Venue: ${location.latitude}, ${location.longitude}`);
-
         const distKm = getDistanceFromLatLonInKm(userLat, userLon, location.latitude, location.longitude);
         const distMiles = distKm * 0.621371;
-
-        console.log(`Calculated Distance: ${distMiles.toFixed(2)} miles`);
 
         if (distMiles > 0.5) {
             toast.error(`Too far! You are ${distMiles.toFixed(1)} miles away.`);
@@ -111,7 +107,6 @@ const LocationDetails = () => {
             setCheckingLocation(false);
         }
     }, (error) => {
-        console.error("Geo Error:", error);
         toast.error("Could not get your location. Enable GPS.");
         setCheckingLocation(false);
     });
@@ -154,7 +149,7 @@ const LocationDetails = () => {
   return (
     <div className={`min-h-screen bg-slate-950 pb-20 ${isPromoted ? 'bg-amber-950/10' : ''}`}>
       
-      {/* 🟢 PROMOTED: Hero Glow Effect */}
+      {/* Hero Image */}
       <div className={`relative h-72 w-full ${isPromoted ? 'border-b-4 border-amber-500 shadow-[0_0_50px_rgba(245,158,11,0.3)]' : ''}`}>
         <img src={heroImage} alt={location.name} className="w-full h-full object-cover" />
         <button onClick={() => navigate('/')} className="absolute top-4 left-4 p-3 bg-black/60 backdrop-blur-md rounded-full text-white z-50">
@@ -164,7 +159,6 @@ const LocationDetails = () => {
         
         <div className="absolute bottom-0 left-0 p-6 w-full z-20">
           
-          {/* 🟢 PROMOTED: Crown Badge */}
           {isPromoted && (
               <div className="inline-flex items-center gap-1.5 bg-amber-500 text-black px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest mb-2 shadow-lg animate-in slide-in-from-left-4">
                   <Crown className="w-4 h-4 fill-black" />
@@ -191,7 +185,7 @@ const LocationDetails = () => {
       </div>
 
       <div className="p-6 space-y-6">
-        {/* Info Card - 🟢 PROMOTED: Gold Border */}
+        {/* Info Card */}
         <div className={`bg-slate-900/50 p-5 rounded-2xl border space-y-4 shadow-xl ${isPromoted ? 'border-amber-500/50 shadow-amber-500/10' : 'border-slate-800'}`}>
           <div className="flex items-center justify-between">
              <div className="flex items-center gap-3 text-slate-300">
@@ -246,7 +240,7 @@ const LocationDetails = () => {
           </div>
         )}
 
-        {/* Check In Button - 🟢 PROMOTED: Gold Button */}
+        {/* Check In Button */}
         <div className="w-full">
             {!checkedIn ? (
                 <button 
@@ -293,9 +287,49 @@ const LocationDetails = () => {
         <p className="text-slate-400 text-sm leading-relaxed text-center px-4 pb-4">
             {location.description || "Join the local scene at this venue."}
         </p>
+
+        {/* 🟢 YOUR HISTORY AT THIS LOCATION (Inserted Here) */}
+        <div className="mt-8 border-t border-slate-800 pt-6 px-4">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Your History Here</h3>
+            <LocationHistory locationId={id} />
+        </div>
+
       </div>
     </div>
   );
 };
+
+// 🟢 Sub-Component: Location History
+function LocationHistory({ locationId }) {
+    const { user } = useAuth();
+    const [history, setHistory] = useState([]);
+
+    useEffect(() => {
+        async function load() {
+            // Get dates I visited
+            const { data: visits } = await supabase.from('checkins')
+                .select('created_at')
+                .eq('user_id', user.id).eq('location_id', locationId)
+                .order('created_at', { ascending: false });
+            
+            // Note: We could merge 'meetings' here too, but start simple
+            setHistory(visits || []);
+        }
+        if (user) load();
+    }, [user, locationId]);
+
+    if (history.length === 0) return <p className="text-xs text-slate-600 italic">First time here!</p>;
+
+    return (
+        <div className="space-y-3">
+            {history.map((h, i) => (
+                <div key={i} className="flex items-center gap-3 text-sm text-slate-400 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                    <Calendar className="w-4 h-4 text-amber-500" />
+                    <span>Visited on {new Date(h.created_at).toLocaleDateString()}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 export default LocationDetails;

@@ -409,21 +409,25 @@ const Home = () => {
           <PeopleMetList />
       </div>
 
-      {/* 🟢 LIFE STATS (Footer) */}
+      {/* 🟢 LIFE STATS (Clickable) */}
       <div className="mt-8 mx-4 p-4 bg-slate-900 border border-slate-800 rounded-2xl grid grid-cols-2 gap-4 text-center">
-          <div className="space-y-1">
+          <div 
+            onClick={() => navigate('/connections')} 
+            className="space-y-1 cursor-pointer hover:bg-slate-800 rounded-xl transition py-2"
+          >
               <div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div>
               <div className="text-2xl font-black text-white">{stats.peopleMet}</div>
               <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div>
           </div>
-          <div className="space-y-1 border-l border-slate-800">
+          <div 
+            onClick={() => navigate('/places')} 
+            className="space-y-1 border-l border-slate-800 cursor-pointer hover:bg-slate-800 rounded-xl transition py-2"
+          >
               <div className="flex justify-center text-green-500 mb-1"><MapIcon className="w-6 h-6" /></div>
               <div className="text-2xl font-black text-white">{stats.placesVisited}</div>
               <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Places Visited</div>
           </div>
       </div>
-
-    </div>
   );
 };
 
