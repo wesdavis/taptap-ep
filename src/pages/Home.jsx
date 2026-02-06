@@ -4,11 +4,14 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
-import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3 } from 'lucide-react';
+import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 API KEY
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
+
+// 🟢 CONFIG: The Name of the place to Promote (Case Sensitive)
+const PROMOTED_VENUE_NAME = "The Coffee Box";
 
 // Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -36,14 +39,31 @@ const Home = () => {
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
+  const [currentCity, setCurrentCity] = useState("El Paso"); // 🟢 Default City
   
   const [currentCheckIn, setCurrentCheckIn] = useState(null); 
   const [activeUsersAtLocation, setActiveUsersAtLocation] = useState([]);
 
   useEffect(() => {
     if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        setUserCoords({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setUserCoords({ latitude: lat, longitude: lng });
+
+        // 🟢 NEW: Reverse Geocode to get City Name
+        try {
+            const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`);
+            const data = await res.json();
+            if (data.results && data.results.length > 0) {
+                // Find the "locality" (City) component
+                const addressComponents = data.results[0].address_components;
+                const cityObj = addressComponents.find(c => c.types.includes("locality"));
+                if (cityObj) setCurrentCity(cityObj.long_name);
+            }
+        } catch (err) {
+            console.error("City fetch failed", err);
+        }
       });
     }
   }, []);
@@ -53,11 +73,9 @@ const Home = () => {
       try {
         setLoading(true);
         if (user) {
-          // 1. Fetch Profile
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // 2. Fetch Sent Pings (Missions)
           const { data: sentData } = await supabase
             .from('pings')
             .select(`*, receiver:profiles!to_user_id(*)`) 
@@ -66,7 +84,6 @@ const Home = () => {
             .order('created_at', { ascending: false });
           setActiveMissions(sentData || []);
 
-          // 3. Fetch Received Pings (Mysteries)
           const { data: receivedData } = await supabase
             .from('pings')
             .select(`*, sender:profiles!from_user_id(*)`) 
@@ -75,7 +92,6 @@ const Home = () => {
             .order('created_at', { ascending: false });
           setMysteryPings(receivedData || []);
 
-          // 4. Fetch Check-in
           const { data: myCheckIn } = await supabase
             .from('checkins')
             .select(`*, locations (*)`)
@@ -149,15 +165,17 @@ const Home = () => {
     });
   }, [locations, userCoords, sortBy]);
 
+  // 🟢 NEW: Split List into Promoted vs Others
+  const promotedLocation = sortedLocations.find(l => l.name === PROMOTED_VENUE_NAME);
+  const otherLocations = sortedLocations.filter(l => l.name !== PROMOTED_VENUE_NAME);
+
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500">Loading...</div>;
 
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
       
-      {/* 🟢 NEW: CINEMATIC HEADER (Fills the space!) */}
+      {/* CINEMATIC HEADER */}
       <div className="relative w-full h-[45vh] min-h-[400px] bg-slate-900 rounded-b-[3rem] overflow-hidden shadow-2xl mb-8 group">
-        
-        {/* 1. The Giant Photo Background */}
         {profile?.avatar_url ? (
             <img 
                 src={profile.avatar_url} 
@@ -170,14 +188,9 @@ const Home = () => {
                 <User className="w-24 h-24 text-slate-600" />
             </div>
         )}
-
-        {/* 2. The Gradient Overlay (Ensures text is readable) */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none" />
 
-        {/* 3. The Floating Content */}
         <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-center text-center z-10">
-            
-            {/* Name & Handle */}
             <h1 
                 onClick={() => navigate(`/user/${user?.id}`)}
                 className="text-4xl font-black text-white tracking-tight drop-shadow-lg cursor-pointer"
@@ -187,16 +200,11 @@ const Home = () => {
             <p className="text-amber-400 text-lg font-bold tracking-wide drop-shadow-md mb-4">
                 @{profile?.handle || "user"}
             </p>
-
-            {/* Stats & Edit Row */}
             <div className="flex items-center gap-3">
-                {/* XP Badge */}
                 <div className="bg-black/40 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
                     <Trophy className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                     <span className="text-sm font-bold text-white">{profile?.xp || 0} XP</span>
                 </div>
-
-                {/* Edit Button */}
                 <button 
                     onClick={(e) => { e.stopPropagation(); navigate('/profile-setup'); }}
                     className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full flex items-center gap-2 hover:bg-white/20 transition active:scale-95 shadow-lg"
@@ -235,10 +243,6 @@ const Home = () => {
                 <div className="flex justify-between items-start mb-6 relative z-10">
                     <div>
                         <span className="flex items-center gap-1.5 text-green-400 text-xs font-bold uppercase tracking-wider mb-1">
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                            </span>
                             Live Mode Active
                         </span>
                         <h2 className="text-2xl font-bold text-white leading-none">
@@ -270,9 +274,12 @@ const Home = () => {
         </div>
       )}
 
-      {/* Locations List */}
+      {/* 🟢 NEW: DYNAMIC CITY HEADER */}
       <div className="px-6 mb-2 flex items-center justify-between">
-        <h2 className="text-lg font-bold flex items-center gap-2"><MapPin className="w-5 h-5 text-amber-500" /> Nearby Spots</h2>
+        <h2 className="text-lg font-bold flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-amber-500" /> 
+            Tap Tap - {currentCity}
+        </h2>
         <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
            <button onClick={() => setSortBy('distance')} className={`px-3 py-1 text-[10px] font-bold rounded-md transition ${sortBy === 'distance' ? 'bg-amber-500 text-black' : 'text-slate-400'}`}>Near</button>
            <button onClick={() => setSortBy('rating')} className={`px-3 py-1 text-[10px] font-bold rounded-md transition ${sortBy === 'rating' ? 'bg-amber-500 text-black' : 'text-slate-400'}`}>Top</button>
@@ -280,8 +287,57 @@ const Home = () => {
       </div>
       
       <div className="px-4 space-y-3">
-        {sortedLocations.map((loc) => {
+        {/* 🟢 NEW: PROMOTED SLOT (Pinned to Top) */}
+        {promotedLocation && (
+            <div 
+                key={promotedLocation.id} 
+                onClick={() => navigate(`/location/${promotedLocation.id}`)}
+                className="bg-amber-950/20 border-2 border-amber-500/50 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden"
+            >
+                {/* Gold Glow Effect */}
+                <div className="absolute -right-10 -top-10 w-32 h-32 bg-amber-500/20 blur-3xl rounded-full pointer-events-none"></div>
+                
+                {/* Promoted Badge */}
+                <div className="absolute top-2 right-2 flex items-center gap-1 bg-amber-500 text-black text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm z-10">
+                    <Crown className="w-3 h-3 fill-black" />
+                    PROMOTED
+                </div>
 
+                <div className="flex items-center justify-between relative z-0">
+                    <div className="flex-1 min-w-0 pr-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-white font-bold truncate text-base">{promotedLocation.name}</span>
+                            <div className="flex items-center gap-0.5 text-yellow-400 text-xs">
+                                <Star className="w-3 h-3 fill-yellow-400" />
+                                <span>{promotedLocation.google_rating || promotedLocation.rating || 4.5}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
+                            <span className="px-2 py-0.5 bg-slate-800 rounded text-amber-500 uppercase font-bold text-[10px]">{promotedLocation.type}</span>
+                            <span className="text-green-400">{promotedLocation.price_level}</span>
+                            <span>•</span>
+                            <span>{promotedLocation._distance < 100 ? `${promotedLocation._distance.toFixed(1)} mi` : 'Far away'}</span>
+                        </div>
+                        <p className="text-amber-200/70 text-xs truncate italic">{promotedLocation.address}</p>
+                    </div>
+                    <div className="relative w-16 h-16 shrink-0">
+                        <img 
+                            src={
+                                (promotedLocation.google_photos && promotedLocation.google_photos.length > 0)
+                                ? `https://places.googleapis.com/v1/${promotedLocation.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`
+                                : (promotedLocation.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400")
+                            } 
+                            alt={promotedLocation.name} 
+                            className="w-full h-full object-cover rounded-lg border border-amber-500/30" 
+                        />
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-amber-500 ml-2" />
+                </div>
+            </div>
+        )}
+
+        {/* STANDARD LIST (Mapped normally) */}
+        {otherLocations.map((loc) => {
             const imageUrl = (loc.google_photos && loc.google_photos.length > 0)
                 ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`
                 : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");

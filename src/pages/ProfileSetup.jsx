@@ -203,7 +203,7 @@ export default function ProfileSetup() {
                     <SelectContent className="bg-slate-900 border-slate-800 text-white">
                         <SelectItem value="Male">Male</SelectItem>
                         <SelectItem value="Female">Female</SelectItem>
-                        <SelectItem value="Non-binary">Non-binary</SelectItem>
+                        
                     </SelectContent>
                 </Select>
             </div>
