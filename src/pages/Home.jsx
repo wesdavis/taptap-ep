@@ -4,10 +4,10 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
-import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut } from 'lucide-react';
+import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
-// 🟢 ADDED: API KEY FOR PHOTOS
+// 🟢 API KEY
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
 // Distance Calculator
@@ -37,7 +37,6 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
   
-  // Active Check-in State
   const [currentCheckIn, setCurrentCheckIn] = useState(null); 
   const [activeUsersAtLocation, setActiveUsersAtLocation] = useState([]);
 
@@ -113,7 +112,6 @@ const Home = () => {
     } catch (error) { console.error(error); }
   };
 
-  // Auto Check-out Logic
   useEffect(() => {
     if (currentCheckIn && userCoords && currentCheckIn.locations) {
       const loc = currentCheckIn.locations;
@@ -133,7 +131,6 @@ const Home = () => {
     
     const { error } = await supabase.from('pings').delete().eq('id', pingId);
     if (error) {
-        console.error(error);
         toast.error("Failed to cancel ping");
     } else {
         toast.success("Card dismissed");
@@ -156,28 +153,54 @@ const Home = () => {
 
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
-      <div className="bg-slate-900 border-b border-slate-800 p-6 rounded-b-3xl shadow-2xl mb-6">
-        <div className="flex justify-between items-start mb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-slate-800 border-2 border-amber-500 overflow-hidden relative">
-              {profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" /> : <User className="w-6 h-6 m-auto mt-3 text-slate-400" />}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">{profile?.display_name || "Explorer"}</h1>
-              <div className="flex items-center gap-2 mt-1">
-                 <p className="text-amber-500 text-xs font-medium">@{profile?.handle || "user"}</p>
-                 <span onClick={() => navigate('/achievements')} className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 flex items-center gap-1 cursor-pointer hover:bg-slate-700 transition">
-                   <Trophy className="w-3 h-3 text-yellow-500" />
-                   {profile?.xp || 0} XP
-                 </span>
-              </div>
-            </div>
-          </div>
-          <button onClick={() => navigate('/profile-setup')}><Settings className="w-5 h-5 text-slate-400" /></button>
-        </div>
+      <div className="bg-slate-900 border-b border-slate-800 p-6 rounded-b-3xl shadow-2xl mb-6 relative overflow-hidden">
         
+        {/* Background Blur Effect */}
+        <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
+
+        {/* 🟢 NEW: FRONT & CENTER PROFILE */}
+        <div className="flex flex-col items-center relative z-10 pt-4">
+            <div 
+                onClick={() => navigate(`/user/${user?.id}`)} 
+                className="relative w-24 h-24 rounded-full border-4 border-slate-800 shadow-xl cursor-pointer group hover:scale-105 transition-transform"
+            >
+                {/* 🟢 Avatar Image (Uses First Photo) */}
+                {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} className="w-full h-full object-cover rounded-full" />
+                ) : (
+                    <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-full"><User className="text-slate-500" /></div>
+                )}
+                
+                {/* "View Profile" Icon Badge */}
+                <div className="absolute bottom-0 right-0 bg-amber-500 text-black p-1.5 rounded-full border-2 border-slate-900 shadow-sm">
+                    <Eye className="w-3 h-3" />
+                </div>
+            </div>
+
+            <div className="text-center mt-3">
+                <h1 className="text-2xl font-bold text-white tracking-tight">{profile?.display_name || "Explorer"}</h1>
+                <p className="text-amber-500 text-sm font-medium">@{profile?.handle || "user"}</p>
+            </div>
+
+            {/* Stats Row */}
+            <div className="flex gap-4 mt-4">
+                <div className="bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700/50 flex flex-col items-center min-w-[80px]">
+                    <span className="text-xl font-bold text-white">{profile?.xp || 0}</span>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">XP</span>
+                </div>
+                {/* Edit Profile Button (Small) */}
+                <button 
+                    onClick={() => navigate('/profile-setup')}
+                    className="bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700/50 flex flex-col items-center justify-center min-w-[80px] hover:bg-slate-700 transition"
+                >
+                    <Settings className="w-5 h-5 text-slate-400 mb-0.5" />
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Edit</span>
+                </button>
+            </div>
+        </div>
+
         {/* GAME LAYER */}
-        <div className="space-y-4">
+        <div className="space-y-4 mt-8">
            {activeMissions.map(ping => (
                 <MissionCard 
                     key={ping.id} 
@@ -196,7 +219,7 @@ const Home = () => {
         </div>
       </div>
 
-      {/* ACTIVE LOCATION CARD (Live Mode) */}
+      {/* ACTIVE LOCATION CARD */}
       {currentCheckIn && (
         <div className="px-4 mb-8">
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-amber-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
@@ -250,39 +273,35 @@ const Home = () => {
       
       <div className="px-4 space-y-3">
         {sortedLocations.map((loc) => {
-            
-          // 🟢 FIXED: SMART IMAGE LOGIC
-          const imageUrl = (loc.google_photos && loc.google_photos.length > 0)
-            ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`
-            : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");
-            
-          return (
-            <div key={loc.id} onClick={() => navigate(`/location/${loc.id}`)} className="flex items-center justify-between bg-slate-900/50 border border-slate-800 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer">
-              <div className="flex-1 min-w-0 pr-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-white font-bold truncate text-base">{loc.name}</span>
-                  <div className="flex items-center gap-0.5 text-yellow-400 text-xs">
-                     <Star className="w-3 h-3 fill-yellow-400" />
-                     {/* 🟢 FIXED: Prefer Google Rating */}
-                     <span>{loc.google_rating || loc.rating || 4.5}</span>
+
+            const imageUrl = (loc.google_photos && loc.google_photos.length > 0)
+                ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`
+                : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");
+
+            return (
+              <div key={loc.id} onClick={() => navigate(`/location/${loc.id}`)} className="flex items-center justify-between bg-slate-900/50 border border-slate-800 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer">
+                <div className="flex-1 min-w-0 pr-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-white font-bold truncate text-base">{loc.name}</span>
+                    <div className="flex items-center gap-0.5 text-yellow-400 text-xs">
+                       <Star className="w-3 h-3 fill-yellow-400" />
+                       <span>{loc.google_rating || loc.rating || 4.5}</span>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
+                    <span className="px-2 py-0.5 bg-slate-800 rounded text-amber-500 uppercase font-bold text-[10px]">{loc.type}</span>
+                    {loc.price_level && <span className="text-green-400">{loc.price_level}</span>}
+                    <span>•</span>
+                    <span>{loc._distance < 100 ? `${loc._distance.toFixed(1)} mi` : 'Far away'}</span>
+                  </div>
+                  <p className="text-slate-500 text-xs truncate">{loc.address}</p>
                 </div>
-                <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
-                  <span className="px-2 py-0.5 bg-slate-800 rounded text-amber-500 uppercase font-bold text-[10px]">{loc.type}</span>
-                  {/* 🟢 FIXED: Show Price Level if available */}
-                  {loc.price_level && <span className="text-green-400">{loc.price_level}</span>}
-                  <span>•</span>
-                  <span>{loc._distance < 100 ? `${loc._distance.toFixed(1)} mi` : 'Far away'}</span>
+                <div className="relative w-16 h-16 shrink-0">
+                    <img src={imageUrl} alt={loc.name} className="w-full h-full object-cover rounded-lg border border-slate-700" loading="lazy" />
                 </div>
-                <p className="text-slate-500 text-xs truncate">{loc.address}</p>
+                <ChevronRight className="w-4 h-4 text-slate-600 ml-2" />
               </div>
-              <div className="relative w-16 h-16 shrink-0">
-                  {/* 🟢 FIXED: Using the Smart ImageUrl variable */}
-                  <img src={imageUrl} alt={loc.name} className="w-full h-full object-cover rounded-lg border border-slate-700" loading="lazy" />
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-600 ml-2" />
-            </div>
-          );
+            );
         })}
       </div>
     </div>

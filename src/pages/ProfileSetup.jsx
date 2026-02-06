@@ -32,7 +32,7 @@ export default function ProfileSetup() {
     gender: '',
     bio: '',
     avatar_url: '',
-    photos: [] // 🟢 New Photos Array
+    photos: [] 
   });
 
   useEffect(() => {
@@ -60,7 +60,6 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 NEW: HANDLE PHOTO UPLOAD
   async function handlePhotoUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -71,19 +70,16 @@ export default function ProfileSetup() {
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
 
-        // Upload to 'profile_photos' bucket
         const { error: uploadError } = await supabase.storage
             .from('profile_photos')
             .upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
-        // Get Public URL
         const { data: { publicUrl } } = supabase.storage
             .from('profile_photos')
             .getPublicUrl(filePath);
 
-        // Add to state
         setFormData(prev => ({
             ...prev,
             photos: [...prev.photos, publicUrl]
@@ -97,7 +93,6 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 NEW: REMOVE PHOTO
   function removePhoto(indexToRemove) {
       setFormData(prev => ({
           ...prev,
@@ -111,12 +106,10 @@ export default function ProfileSetup() {
     try {
         const cleanHandle = formData.handle.replace('@', '').toLowerCase().replace(/\s/g, '');
         
-        let finalAvatar = formData.avatar_url;
-        // If they have photos but no avatar, use the first photo
-        if (!finalAvatar && formData.photos.length > 0) {
-            finalAvatar = formData.photos[0];
-        }
-        // If still no avatar, use generic
+        // 🟢 FIX: Force Avatar to ALWAYS be the first photo in the gallery
+        // If no gallery, fallback to existing avatar or auto-generated one.
+        let finalAvatar = formData.photos.length > 0 ? formData.photos[0] : formData.avatar_url;
+        
         if (!finalAvatar) {
             finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.full_name)}&background=random&color=fff&size=256`;
         }
@@ -127,8 +120,8 @@ export default function ProfileSetup() {
             handle: cleanHandle,
             gender: formData.gender,
             bio: formData.bio,
-            avatar_url: finalAvatar,
-            photos: formData.photos, // Save the array
+            avatar_url: finalAvatar, // <--- This now syncs with Photo #1
+            photos: formData.photos, 
             updated_at: new Date()
         });
 
@@ -147,9 +140,8 @@ export default function ProfileSetup() {
     navigate('/auth');
   };
 
-  // ADMIN TOOLS (Kept for your use)
-  const runEnrichment = async () => { /* ... Keep your existing Admin code here ... */ };
-  const runPhotoFetch = async () => { /* ... Keep your existing Admin code here ... */ };
+  const runEnrichment = async () => { /* ... Keep Admin Logic ... */ };
+  const runPhotoFetch = async () => { /* ... Keep Admin Logic ... */ };
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
 
@@ -170,20 +162,18 @@ export default function ProfileSetup() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
             
-            {/* 🟢 NEW: PHOTO GALLERY UPLOADER */}
             <div className="space-y-3">
                 <Label>Your Photos</Label>
+                <p className="text-xs text-slate-400 mb-2">The first photo will be your Profile Picture.</p>
                 <div className="grid grid-cols-3 gap-3">
-                    {/* Upload Button */}
                     <label className="aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700/50 hover:border-amber-500 transition-colors">
                         {uploading ? <Loader2 className="w-6 h-6 animate-spin text-amber-500" /> : <Plus className="w-8 h-8 text-slate-400" />}
                         <span className="text-[10px] uppercase font-bold text-slate-500 mt-1">Add Photo</span>
                         <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
                     </label>
 
-                    {/* Existing Photos */}
                     {formData.photos.map((url, index) => (
-                        <div key={index} className="aspect-square rounded-xl overflow-hidden relative group">
+                        <div key={index} className="aspect-square rounded-xl overflow-hidden relative group border border-slate-700">
                             <img src={url} className="w-full h-full object-cover" alt="Profile" />
                             <button 
                                 type="button"
@@ -192,7 +182,7 @@ export default function ProfileSetup() {
                             >
                                 <X className="w-4 h-4" />
                             </button>
-                            {index === 0 && <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-center py-0.5 text-white font-bold uppercase">Main</div>}
+                            {index === 0 && <div className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-[8px] text-center py-1 text-black font-black uppercase tracking-wider">Main Photo</div>}
                         </div>
                     ))}
                 </div>
@@ -225,8 +215,6 @@ export default function ProfileSetup() {
                 {saving ? <Loader2 className="animate-spin" /> : "Save Changes"}
             </Button>
         </form>
-
-        {/* Admin Controls Area (Can remain as previous) */}
       </div>
     </div>
   );
