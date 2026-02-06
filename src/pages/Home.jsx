@@ -426,8 +426,9 @@ const Home = () => {
               <div className="flex justify-center text-green-500 mb-1"><MapIcon className="w-6 h-6" /></div>
               <div className="text-2xl font-black text-white">{stats.placesVisited}</div>
               <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Places Visited</div>
-          </div>
-      </div>
+        </div>  {/* This closes the Life Stats Grid */}
+
+    </div>  {/* 🟢 MISSING: This closes the Main Page Wrapper */}
   );
 };
 
