@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import MissionCard from '../components/gamification/MissionCard'; 
 import MysteryCard from '../components/gamification/MysteryCard'; 
-import PeopleMetList from '../components/notifications/PeopleMetList'; // 🟢 Restored
+import PeopleMetList from '../components/notifications/PeopleMetList'; 
 import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,8 +40,8 @@ const Home = () => {
   const [currentCity, setCurrentCity] = useState("El Paso"); 
   
   const [currentCheckIn, setCurrentCheckIn] = useState(null); 
-  const [activeUsersAtLocation, setActiveUsersAtLocation] = useState({}); // Changed to object map for quick lookup
-  const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 }); // 🟢 New Stats
+  const [activeUsersAtLocation, setActiveUsersAtLocation] = useState({}); 
+  const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 });
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -73,7 +73,6 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // Get Pings
           const { data: sentData } = await supabase
             .from('pings')
             .select(`*, receiver:profiles!to_user_id(*)`) 
@@ -90,7 +89,6 @@ const Home = () => {
             .order('created_at', { ascending: false });
           setMysteryPings(receivedData || []);
 
-          // Get Checkin
           const { data: myCheckIn } = await supabase
             .from('checkins')
             .select(`*, locations (*)`)
@@ -99,7 +97,6 @@ const Home = () => {
             .maybeSingle();
           setCurrentCheckIn(myCheckIn);
 
-          // 🟢 GET LIVE CHECKIN COUNTS (For Party Meter)
           const { data: allCheckins } = await supabase
             .from('checkins')
             .select('location_id')
@@ -111,17 +108,16 @@ const Home = () => {
           });
           setActiveUsersAtLocation(counts);
 
-          // 🟢 GET USER STATS (People Met & Places)
           const { count: visitedCount } = await supabase
             .from('checkins')
             .select('location_id', { count: 'exact', head: true })
-            .eq('user_id', user.id); // Total checkins (simplification for "places visited")
+            .eq('user_id', user.id); 
 
           const { count: metCount } = await supabase
             .from('pings')
             .select('id', { count: 'exact', head: true })
             .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`)
-            .eq('status', 'accepted'); // Only counted if accepted
+            .eq('status', 'accepted'); 
 
           setStats({
               peopleMet: metCount || 0,
@@ -171,7 +167,6 @@ const Home = () => {
     }
   };
 
-  // 🟢 Helper: Determine "Party Meter" Level
   const getPartyVibe = (count) => {
       if (count >= 10) return { label: "PACKED 🚨", color: "text-red-500 bg-red-500/10 border-red-500/20" };
       if (count >= 6) return { label: "BUSY 🔥", color: "text-orange-500 bg-orange-500/10 border-orange-500/20" };
@@ -324,7 +319,6 @@ const Home = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
-                            {/* 🟢 PARTY METER (Promoted) */}
                             {(() => {
                                 const count = activeUsersAtLocation[promotedLocation.id] || 0;
                                 const vibe = getPartyVibe(count);
@@ -376,7 +370,6 @@ const Home = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
-                    {/* 🟢 PARTY METER (Standard) */}
                     <span className={`px-1.5 py-0.5 rounded border ${vibe.color} font-bold text-[9px] uppercase`}>
                         {vibe.label}
                     </span>
@@ -395,12 +388,11 @@ const Home = () => {
         })}
       </div>
 
-      {/* 🟢 SEPARATOR */}
       <div className="px-4 py-6">
           <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
       </div>
 
-      {/* 🟢 PEOPLE MET LIST (Restored) */}
+      {/* PEOPLE MET LIST */}
       <div className="px-4 space-y-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
               <Users className="w-5 h-5 text-amber-500" /> 
@@ -409,7 +401,7 @@ const Home = () => {
           <PeopleMetList />
       </div>
 
-      {/* 🟢 LIFE STATS (Clickable) */}
+      {/* LIFE STATS (Clickable) */}
       <div className="mt-8 mx-4 p-4 bg-slate-900 border border-slate-800 rounded-2xl grid grid-cols-2 gap-4 text-center">
           <div 
             onClick={() => navigate('/connections')} 
@@ -426,9 +418,10 @@ const Home = () => {
               <div className="flex justify-center text-green-500 mb-1"><MapIcon className="w-6 h-6" /></div>
               <div className="text-2xl font-black text-white">{stats.placesVisited}</div>
               <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Places Visited</div>
-        </div>  {/* This closes the Life Stats Grid */}
+          </div>
+      </div>
 
-    </div>  {/* 🟢 MISSING: This closes the Main Page Wrapper */}
+    </div>
   );
 };
 
