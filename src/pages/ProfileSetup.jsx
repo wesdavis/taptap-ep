@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Camera, ArrowLeft, Zap, Image as ImageIcon, LogOut } from 'lucide-react';
+import { Loader2, Camera, ArrowLeft, Zap, Image as ImageIcon, LogOut, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 YOUR API KEY
@@ -63,7 +63,6 @@ export default function ProfileSetup() {
     try {
         const cleanHandle = formData.handle.replace('@', '').toLowerCase().replace(/\s/g, '');
         
-        // 🟢 AUTO-GENERATE AVATAR if missing
         let finalAvatar = formData.avatar_url;
         if (!finalAvatar) {
             finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.full_name)}&background=random&color=fff&size=256`;
@@ -94,9 +93,9 @@ export default function ProfileSetup() {
     navigate('/auth');
   };
 
-  // 🟢 1. DATA ENRICHMENT
+  // 🟢 1. DATA ENRICHMENT (Now with GPS Coordinates!)
   const runEnrichment = async () => {
-    if (!confirm("Admin: Fetch Ratings/Prices for ALL locations?")) return;
+    if (!confirm("Admin: Fetch Lat/Lng, Ratings & Prices for ALL locations?")) return;
     setEnriching(true);
     setStatusMsg("Starting Data Fetch...");
     setProgress(0);
@@ -115,14 +114,16 @@ export default function ProfileSetup() {
                     const sData = await search.json();
                     if (sData.places?.[0]) placeId = sData.places[0].id;
                 }
+                
                 if (placeId) {
+                    // 🟢 Added 'location' to the request mask
                     const details = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
-                        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': GOOGLE_KEY, 'X-Goog-FieldMask': 'rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary' }
+                        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': GOOGLE_KEY, 'X-Goog-FieldMask': 'location,rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri,regularOpeningHours,editorialSummary' }
                     });
                     const dData = await details.json();
                     const priceMap = { 'PRICE_LEVEL_INEXPENSIVE': '$', 'PRICE_LEVEL_MODERATE': '$$', 'PRICE_LEVEL_EXPENSIVE': '$$$' };
                     
-                    await supabase.from('locations').update({
+                    const updates = {
                         google_place_id: placeId,
                         google_rating: dData.rating,
                         google_user_ratings_total: dData.userRatingCount,
@@ -130,14 +131,22 @@ export default function ProfileSetup() {
                         phone: dData.nationalPhoneNumber,
                         website: dData.websiteUri,
                         description: dData.editorialSummary?.text || loc.description
-                    }).eq('id', loc.id);
+                    };
+
+                    // 🟢 Update Lat/Lng if Google provides them
+                    if (dData.location) {
+                        updates.latitude = dData.location.latitude;
+                        updates.longitude = dData.location.longitude;
+                    }
+
+                    await supabase.from('locations').update(updates).eq('id', loc.id);
                     count++;
                 }
                 setProgress(Math.round(((count + 1) / locs.length) * 100));
                 await new Promise(r => setTimeout(r, 200));
             } catch (err) {}
         }
-        toast.success(`Updated ${count} locations.`);
+        toast.success(`Updated ${count} locations with GPS.`);
     } catch (err) { toast.error("Failed."); } finally { setEnriching(false); }
   };
 
@@ -181,7 +190,6 @@ export default function ProfileSetup() {
                 </Button>
                 <h1 className="text-2xl font-bold">Edit Profile</h1>
             </div>
-            {/* 🟢 LOGOUT BUTTON RESTORED */}
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
                 <LogOut className="w-4 h-4 mr-2" /> Log Out
             </Button>
@@ -230,7 +238,7 @@ export default function ProfileSetup() {
             <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2 text-center">Admin Controls</h3>
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3">
                 <Button variant="outline" onClick={runEnrichment} disabled={enriching} className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10">
-                    {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />} 1. Fetch Data
+                    {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <MapPin className="w-4 h-4 mr-2" />} 1. Update Coordinates
                 </Button>
                 <Button variant="outline" onClick={runPhotoFetch} disabled={enriching} className="w-full border-pink-500/30 text-pink-400 hover:bg-pink-500/10">
                     {enriching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ImageIcon className="w-4 h-4 mr-2" />} 2. Fetch Photos
