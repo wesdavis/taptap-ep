@@ -2,12 +2,15 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import MissionCard from '../components/gamification/MissionCard'; 
-import MysteryCard from '../components/gamification/MysteryCard'; 
+
+// 🟢 NEW COMPONENTS
+import MysteryPopup from '../components/gamification/MysteryPopup'; 
+import DidWeMeet from '../components/notifications/DidWeMeet';     
 import PeopleMetList from '../components/notifications/PeopleMetList'; 
-import PlacesList from '../components/profile/PlacesList'; // 🟢 NEW IMPORT (Update path if needed)
-import ConnectionsList from '../components/profile/ConnectionsList'; // 🟢 NEW IMPORT
-import { User, Settings, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Activity } from 'lucide-react';
+import PlacesList from '../components/profile/PlacesList'; 
+import ConnectionsList from '../components/profile/ConnectionsList'; 
+
+import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 // 🟢 API KEY
@@ -34,8 +37,11 @@ const Home = () => {
   
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
-  const [activeMissions, setActiveMissions] = useState([]); 
-  const [mysteryPings, setMysteryPings] = useState([]);     
+  
+  // 🟢 RENAMED for clarity: activeMissions -> sentPings
+  const [sentPings, setSentPings] = useState([]); 
+  const [receivedPings, setReceivedPings] = useState([]);     
+  
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
@@ -45,8 +51,7 @@ const Home = () => {
   const [activeUsersAtLocation, setActiveUsersAtLocation] = useState({}); 
   const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 });
   
-  // 🟢 NEW: State for Expanding Lists
-  const [expandedSection, setExpandedSection] = useState(null); // 'people' | 'places' | null
+  const [expandedSection, setExpandedSection] = useState(null); 
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -78,22 +83,25 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
+          // 1. Fetch Sent Pings (I am the Sender/Female)
           const { data: sentData } = await supabase
             .from('pings')
             .select(`*, receiver:profiles!to_user_id(*)`) 
             .eq('from_user_id', user.id)
-            .is('met_confirmed', null)
+            .is('met_confirmed', null) // Only show ones not yet confirmed/rejected
             .order('created_at', { ascending: false });
-          setActiveMissions(sentData || []);
+          setSentPings(sentData || []);
 
+          // 2. Fetch Received Pings (I am the Receiver/Male)
           const { data: receivedData } = await supabase
             .from('pings')
             .select(`*, sender:profiles!from_user_id(*)`) 
             .eq('to_user_id', user.id)
             .is('met_confirmed', null)
             .order('created_at', { ascending: false });
-          setMysteryPings(receivedData || []);
+          setReceivedPings(receivedData || []);
 
+          // 3. Fetch Checkin
           const { data: myCheckIn } = await supabase
             .from('checkins')
             .select(`*, locations (*)`)
@@ -102,6 +110,7 @@ const Home = () => {
             .maybeSingle();
           setCurrentCheckIn(myCheckIn);
 
+          // 4. Stats & Counts
           const { data: allCheckins } = await supabase
             .from('checkins')
             .select('location_id')
@@ -153,24 +162,11 @@ const Home = () => {
       const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
       
       if (dist > 1.0) {
-        console.log("Auto checking out due to distance...");
         handleCheckOut();
         toast.info(`You have been checked out of ${loc.name} because you left the area.`);
       }
     }
   }, [userCoords, currentCheckIn]);
-
-  const handleCancelPing = async (pingId) => {
-    setActiveMissions(prev => prev.filter(p => p.id !== pingId));
-    setMysteryPings(prev => prev.filter(p => p.id !== pingId));
-    
-    const { error } = await supabase.from('pings').delete().eq('id', pingId);
-    if (error) {
-        toast.error("Failed to cancel ping");
-    } else {
-        toast.success("Card dismissed");
-    }
-  };
 
   const getPartyVibe = (count) => {
       if (count >= 10) return { label: "PACKED 🚨", color: "text-red-500 bg-red-500/10 border-red-500/20" };
@@ -192,7 +188,6 @@ const Home = () => {
   }, [locations, userCoords, sortBy]);
 
   const promotedLocation = sortedLocations.find(l => l.is_promoted === true);
-  
   const otherLocations = promotedLocation 
     ? sortedLocations.filter(l => l.id !== promotedLocation.id)
     : sortedLocations;
@@ -202,6 +197,15 @@ const Home = () => {
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
       
+      {/* 🟢 NEW: MYSTERY POPUP (Receiver/Male Side) */}
+      <MysteryPopup 
+        pings={receivedPings.filter(p => p.status === 'pending')} 
+        onDismiss={(id) => {
+             // Locally hide it so it doesn't pop up again instantly
+             setReceivedPings(prev => prev.filter(p => p.id !== id));
+        }} 
+      />
+
       {/* CINEMATIC HEADER */}
       <div className="relative w-full h-[45vh] min-h-[400px] bg-slate-900 rounded-b-[3rem] overflow-hidden shadow-2xl mb-8 group">
         {profile?.avatar_url ? (
@@ -244,21 +248,16 @@ const Home = () => {
         </div>
       </div>
 
-      {/* GAME LAYER */}
+      {/* 🟢 NEW: "DID WE MEET?" (Sender/Female Side) */}
+      {/* This replaces the old Mission Cards */}
       <div className="space-y-4 px-4 -mt-4 relative z-20">
-         {activeMissions.map(ping => (
-              <MissionCard 
+         {sentPings.map(ping => (
+              <DidWeMeet 
                   key={ping.id} 
                   ping={ping} 
-                  onCancel={() => handleCancelPing(ping.id)} 
-                  onComplete={() => window.location.reload()} 
-              />
-          ))}
-         {mysteryPings.map(ping => (
-              <MysteryCard 
-                  key={ping.id} 
-                  ping={ping} 
-                  onCancel={() => handleCancelPing(ping.id)} 
+                  onConfirm={(id) => {
+                      setSentPings(prev => prev.filter(p => p.id !== id));
+                  }} 
               />
           ))}
       </div>
@@ -300,7 +299,6 @@ const Home = () => {
       </div>
       
       <div className="px-4 space-y-3">
-        
         {/* PROMOTED SLOT */}
         {promotedLocation && (
             <div 
@@ -406,10 +404,8 @@ const Home = () => {
           <PeopleMetList />
       </div>
 
-      {/* 🟢 EXPANDABLE LIFE STATS */}
+      {/* EXPANDABLE LIFE STATS */}
       <div className="mt-8 mx-4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300">
-          
-          {/* THE BUTTONS */}
           <div className="grid grid-cols-2 p-4 text-center">
               <div 
                 onClick={() => setExpandedSection(expandedSection === 'people' ? null : 'people')} 
@@ -430,14 +426,12 @@ const Home = () => {
               </div>
           </div>
 
-          {/* THE EXPANDABLE CONTENT AREA */}
           {expandedSection && (
               <div className="border-t border-slate-800 p-4 bg-slate-950/30 animate-in slide-in-from-top-2 fade-in duration-300">
                   {expandedSection === 'people' && <ConnectionsList />}
                   {expandedSection === 'places' && <PlacesList />}
               </div>
           )}
-
       </div>
 
     </div>
