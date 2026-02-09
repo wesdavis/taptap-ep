@@ -13,6 +13,7 @@ import PublicProfile from './pages/PublicProfile';
 import LocationDetails from './pages/LocationDetails'; 
 import Achievements from './pages/Achievements';
 import Settings from './pages/Settings';
+import BusinessDashboard from './pages/BusinessDashboard';
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ const AuthenticatedApp = () => {
       <Route path="/profile-setup" element={!user ? <Navigate to="/landing" replace /> : <ProfileSetup />} />
       <Route path="/achievements" element={!user ? <Navigate to="/landing" replace /> : <Achievements />} />
       <Route path="/settings" element={!user ? <Navigate to="/landing" replace /> : <Settings />} />
+      <Route path="/business" element={!user ? <Navigate to="/landing" replace /> : <BusinessDashboard />} />
 
       {/* Catch-all */}
       <Route path="*" element={<PageNotFound />} />
