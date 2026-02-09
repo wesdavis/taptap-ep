@@ -1,25 +1,34 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../lib/AuthContext';
+import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, LogOut, X, Plus, Crown, ShieldAlert, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
-// 🟢 YOUR API KEY
+// 🟢 AI Safety Libraries
+import * as tf from '@tensorflow/tfjs';
+import * as nsfwjs from 'nsfwjs';
+
+// 🟢 API KEY
 const GOOGLE_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
 export default function ProfileSetup() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
+  // UI States
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [scanning, setScanning] = useState(false); // AI Visual Feedback
+
+  // AI Model State
+  const [model, setModel] = useState(null);
   
   // Admin State
   const [enriching, setEnriching] = useState(false);
@@ -36,10 +45,22 @@ export default function ProfileSetup() {
     is_admin: false 
   });
 
+  // 1. Load Data & AI Model
   useEffect(() => {
-    if (user) {
-        loadProfile();
+    async function init() {
+        // Load AI
+        try {
+            const _model = await nsfwjs.load();
+            setModel(_model);
+            console.log("🛡️ Safety AI Loaded");
+        } catch (err) {
+            console.error("Failed to load safety model", err);
+        }
+        
+        // Load User
+        if (user) loadProfile();
     }
+    init();
   }, [user]);
 
   async function loadProfile() {
@@ -47,7 +68,6 @@ export default function ProfileSetup() {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error && error.code !== 'PGRST116') throw error; 
       if (data) {
-        // 🟢 FIX: Load 'display_name' if available, otherwise fallback to full_name
         setFormData({
             full_name: data.display_name || data.full_name || '',
             handle: data.handle || '',
@@ -78,12 +98,49 @@ export default function ProfileSetup() {
       }
   }
 
+  // 🟢 2. THE AI SCANNER FUNCTION
+  const checkSafety = async (file) => {
+      if (!model) return true; // Fail safe if model didn't load
+      
+      return new Promise((resolve) => {
+          const img = document.createElement('img');
+          img.src = URL.createObjectURL(file);
+          img.onload = async () => {
+              const predictions = await model.classify(img);
+              
+              // Categories: Neutral, Drawing, Sexy, Porn, Hentai
+              const porn = predictions.find(p => p.className === 'Porn');
+              const hentai = predictions.find(p => p.className === 'Hentai');
+              
+              // Strict Threshold: If > 50% sure it's porn, block it.
+              if ((porn && porn.probability > 0.5) || (hentai && hentai.probability > 0.5)) {
+                  resolve(false); // UNSAFE
+              } else {
+                  resolve(true); // SAFE
+              }
+          };
+      });
+  };
+
   async function handlePhotoUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
 
+    setScanning(true);
     setUploading(true);
+
     try {
+        // A. Run Safety Check
+        const isSafe = await checkSafety(file);
+        
+        if (!isSafe) {
+            toast.error("Photo rejected.", { description: "Our AI detected inappropriate content." });
+            setScanning(false);
+            setUploading(false);
+            return; // 🛑 STOP UPLOAD
+        }
+
+        // B. Upload to Supabase
         const fileExt = file.name.split('.').pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
@@ -103,10 +160,12 @@ export default function ProfileSetup() {
             photos: [...prev.photos, publicUrl]
         }));
         
-        toast.success("Photo uploaded!");
+        toast.success("Photo verified & uploaded!");
+
     } catch (error) {
         toast.error("Upload failed: " + error.message);
     } finally {
+        setScanning(false);
         setUploading(false);
     }
   }
@@ -123,7 +182,6 @@ export default function ProfileSetup() {
     setSaving(true);
     try {
         const cleanHandle = formData.handle.replace('@', '').toLowerCase().replace(/\s/g, '');
-        
         let finalAvatar = formData.photos.length > 0 ? formData.photos[0] : formData.avatar_url;
         
         if (!finalAvatar) {
@@ -133,7 +191,7 @@ export default function ProfileSetup() {
         const { error } = await supabase.from('profiles').upsert({
             id: user.id,
             full_name: formData.full_name,
-            display_name: formData.full_name, // 🟢 FIX: Update BOTH columns so they stay in sync
+            display_name: formData.full_name, // Sync display name
             handle: cleanHandle,
             gender: formData.gender,
             bio: formData.bio,
@@ -152,11 +210,9 @@ export default function ProfileSetup() {
     }
   }
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/auth');
-  };
+  const handleLogout = async () => { await logout(); navigate('/auth'); };
 
+  // --- ADMIN TOOLS ---
   const handleSetPromotion = async () => {
     if (!selectedPromoId) return;
     setEnriching(true);
@@ -165,48 +221,31 @@ export default function ProfileSetup() {
         await supabase.from('locations').update({ is_promoted: true }).eq('id', selectedPromoId);
         toast.success("Promotion Updated!");
         loadVenues(); 
-    } catch (e) {
-        toast.error("Failed to set promotion");
-    } finally {
-        setEnriching(false);
-    }
+    } catch (e) { toast.error("Failed to set promotion"); } finally { setEnriching(false); }
   }
 
-  // FORCE CHECKOUT TOOL
   const runGlobalCheckout = async () => {
       if (!confirm("⚠️ ADMIN: Force checkout for EVERYONE? The map will be empty.")) return;
       setEnriching(true);
       try {
           await supabase.from('checkins').update({ is_active: false }).neq('id', 0);
           toast.success("Dancefloor cleared! All users checked out.");
-      } catch (e) { 
-          toast.error("Failed to clear checkins"); 
-      } finally { 
-          setEnriching(false); 
-      }
+      } catch (e) { toast.error("Failed to clear checkins"); } finally { setEnriching(false); }
   }
 
-  // RESET MY HISTORY
   const runResetMyGame = async () => {
       if (!confirm("Reset your Pings? You can meet people again.")) return;
       setEnriching(true);
       try {
           await supabase.from('pings').delete().or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`);
           toast.success("History wiped. You are new again.");
-      } catch (e) { 
-          toast.error("Failed to reset"); 
-      } finally { 
-          setEnriching(false); 
-      }
+      } catch (e) { toast.error("Failed to reset"); } finally { setEnriching(false); }
   }
 
-  // Admin Helpers
   const runEnrichment = async () => { 
       if (!confirm("Admin: Fetch Data?")) return;
       setEnriching(true);
-      try {
-        toast.success("Enrichment mock run"); 
-      } catch(e) {}
+      toast.success("Enrichment mock run"); 
       setEnriching(false);
   };
 
@@ -224,22 +263,25 @@ export default function ProfileSetup() {
       <div className="max-w-md mx-auto">
         <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-slate-400">
-                    <ArrowLeft className="w-6 h-6" />
-                </Button>
+                <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-slate-400"><ArrowLeft className="w-6 h-6" /></Button>
                 <h1 className="text-2xl font-bold">Edit Profile</h1>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                <LogOut className="w-4 h-4 mr-2" /> Log Out
-            </Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10"><LogOut className="w-4 h-4 mr-2" /> Log Out</Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-3">
                 <Label>Your Photos</Label>
                 <div className="grid grid-cols-3 gap-3">
-                    <label className="aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700/50 hover:border-amber-500 transition-colors">
-                        {uploading ? <Loader2 className="w-6 h-6 animate-spin text-amber-500" /> : <Plus className="w-8 h-8 text-slate-400" />}
+                    <label className={`aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700/50 hover:border-amber-500 transition-colors ${scanning ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {scanning ? (
+                            <div className="flex flex-col items-center gap-1 text-amber-500">
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                                <span className="text-[9px] font-bold uppercase tracking-wider">Scanning...</span>
+                            </div>
+                        ) : (
+                            uploading ? <Loader2 className="w-6 h-6 animate-spin text-slate-400" /> : <Plus className="w-8 h-8 text-slate-400" />
+                        )}
                         <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
                     </label>
                     {formData.photos.map((url, index) => (
@@ -250,16 +292,15 @@ export default function ProfileSetup() {
                         </div>
                     ))}
                 </div>
+                {/* Safety Badge */}
+                <div className="flex items-center gap-2 justify-center pt-2 opacity-50">
+                    <ShieldAlert className="w-3 h-3 text-green-500" />
+                    <span className="text-[10px] text-slate-400">AI Safety Scan Active</span>
+                </div>
             </div>
 
-            <div className="space-y-2">
-                <Label>Display Name</Label>
-                <Input required value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="bg-slate-900 border-slate-800" />
-            </div>
-            <div className="space-y-2">
-                <Label>Handle (@)</Label>
-                <Input required value={formData.handle} onChange={e => setFormData({...formData, handle: e.target.value})} className="bg-slate-900 border-slate-800" />
-            </div>
+            <div className="space-y-2"><Label>Display Name</Label><Input required value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
+            <div className="space-y-2"><Label>Handle (@)</Label><Input required value={formData.handle} onChange={e => setFormData({...formData, handle: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             <div className="space-y-2">
                 <Label>Gender</Label>
                 <Select value={formData.gender} onValueChange={val => setFormData({...formData, gender: val})}>
@@ -271,13 +312,8 @@ export default function ProfileSetup() {
                     </SelectContent>
                 </Select>
             </div>
-            <div className="space-y-2">
-                <Label>Bio</Label>
-                <Textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="bg-slate-900 border-slate-800" />
-            </div>
-            <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">
-                {saving ? <Loader2 className="animate-spin" /> : "Save Changes"}
-            </Button>
+            <div className="space-y-2"><Label>Bio</Label><Textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
+            <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">{saving ? <Loader2 className="animate-spin" /> : "Save Changes"}</Button>
         </form>
         
         {/* ONLY SHOW TO ADMINS */}

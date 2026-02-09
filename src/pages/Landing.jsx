@@ -72,8 +72,10 @@ export default function Landing() {
                             </h1>
 
                             <p className="text-lg md:text-xl text-slate-400 mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                                The first social network that only works when you leave the house. 
-                                Check in to venues, see who's actually there, and make connections in the moment.
+                                The first social network that only works when you leave the house.
+                                Check in to venues, see who's actually there, and make connections in the moment. 
+                                
+                                
                             </p>
 
                             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -90,7 +92,7 @@ export default function Landing() {
                                     variant="outline"
                                     className="h-14 px-8 text-lg border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white rounded-2xl"
                                 >
-                                    How it Works
+                                    Only Women have the power to tap. Always.
                                 </Button>
                             </div>
                         </motion.div>
@@ -173,7 +175,7 @@ export default function Landing() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 mb-12">
                     {[
                         { icon: MapPin, title: "Proximity First", desc: "You must be within 0.5 miles to check in. No fakes." },
-                        { icon: Zap, title: "Tap to Connect", desc: "See someone interesting? Send a Ping to break the ice." },
+                        { icon: Zap, title: "Tap to Connect", desc: "Women have the power to tap men. Men check in and set the vibe." },
                         { icon: Coffee, title: "Real Venues", desc: "Curated spots in your city. Bars, cafes, and parks." }
                     ].map((feature, i) => (
                         <div key={i} className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group cursor-default">
