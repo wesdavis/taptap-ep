@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Zap, Check, Loader2, X } from 'lucide-react';
+import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PublicProfile() {
@@ -21,11 +21,13 @@ export default function PublicProfile() {
     const [myGender, setMyGender] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // 🟢 NEW: Location State
+    // Location State
     const [isSameLocation, setIsSameLocation] = useState(false);
     
-    // Full Screen Photo State
-    const [selectedPhoto, setSelectedPhoto] = useState(null);
+    // 🟢 NEW: Gallery State
+    const [photos, setPhotos] = useState([]);
+    const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+    const [selectedPhoto, setSelectedPhoto] = useState(null); // For Full Screen
 
     const isMe = user?.id === userId;
 
@@ -49,6 +51,12 @@ export default function PublicProfile() {
             if (error) throw error;
             setProfile(profileData);
 
+            // 🟢 NEW: Setup Photos Array (Avatar + Extra Photos)
+            const p = (profileData.photos && profileData.photos.length > 0) 
+                ? profileData.photos 
+                : [profileData.avatar_url];
+            setPhotos(p);
+
             // 2. Fetch MY Gender
             const { data: myProfile } = await supabase
                 .from('profiles')
@@ -57,7 +65,7 @@ export default function PublicProfile() {
                 .single();
             setMyGender(myProfile?.gender);
 
-            // 3. 🟢 LOCATION CHECK (The "Smart Gate")
+            // 3. LOCATION CHECK
             // Fetch MY active checkin
             const { data: myCheckin } = await supabase
                 .from('checkins')
@@ -78,7 +86,7 @@ export default function PublicProfile() {
             const match = myCheckin && targetCheckin && (myCheckin.location_id === targetCheckin.location_id);
             setIsSameLocation(match);
 
-            // 4. Check Status (Only if we are active, check for existing pings)
+            // 4. Check Status
             if (myCheckin) {
                 const { data: ping } = await supabase
                     .from('pings')
@@ -86,7 +94,7 @@ export default function PublicProfile() {
                     .eq('from_user_id', user.id)
                     .eq('to_user_id', userId)
                     .eq('location_id', myCheckin.location_id)
-                    .gt('created_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()) // Look back 12 hours max
+                    .gt('created_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()) 
                     .maybeSingle();
 
                 if (ping) setStatus(ping.status || 'pending');
@@ -100,7 +108,6 @@ export default function PublicProfile() {
     }
 
     const handleUniversalTap = async () => {
-        // Double check safety (though button is hidden if false)
         if (!isSameLocation) {
             toast.error("You must be at the same venue to tap!");
             return;
@@ -108,7 +115,6 @@ export default function PublicProfile() {
 
         setIsSubmitting(true);
         try {
-            // Re-fetch my location just to be safe for the insert
             const { data: myCheckin } = await supabase
                 .from('checkins')
                 .select('location_id')
@@ -132,6 +138,21 @@ export default function PublicProfile() {
         }
     };
 
+    // 🟢 NEW: Gallery Navigation Logic
+    const nextPhoto = (e) => {
+        e.stopPropagation();
+        setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
+    };
+
+    const prevPhoto = (e) => {
+        e.stopPropagation();
+        setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
+    };
+
+    const openFullScreen = () => {
+        setSelectedPhoto(photos[currentPhotoIndex]);
+    };
+
     if (loading) return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
             <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
@@ -141,11 +162,10 @@ export default function PublicProfile() {
     if (!profile) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">User not found</div>;
 
     const isFemale = (myGender || '').toLowerCase() === 'female';
-    const photos = (profile.photos && profile.photos.length > 0) ? profile.photos : [profile.avatar_url];
 
     return (
         <div className="min-h-screen bg-slate-950 text-white p-4 pb-32">
-            <div className="flex items-center gap-4 mb-8">
+            <div className="flex items-center gap-4 mb-6">
                 <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-slate-400">
                     <ArrowLeft className="w-6 h-6" />
                 </Button>
@@ -154,23 +174,45 @@ export default function PublicProfile() {
 
             <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
                 
-                {/* PHOTO GALLERY */}
-                <div className="w-full max-w-sm mb-6 grid grid-cols-2 gap-2">
-                    <div 
-                        className="col-span-2 aspect-square rounded-2xl overflow-hidden border-2 border-slate-800 shadow-2xl cursor-pointer"
-                        onClick={() => setSelectedPhoto(photos[0])}
-                    >
-                        <img src={photos[0]} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                {/* 🟢 NEW: SWIPEABLE MAIN GALLERY */}
+                <div 
+                    className="w-full max-w-sm mb-6 relative aspect-square rounded-2xl overflow-hidden border-2 border-slate-800 shadow-2xl group cursor-pointer"
+                    onClick={openFullScreen}
+                >
+                    <img 
+                        src={photos[currentPhotoIndex]} 
+                        className="w-full h-full object-cover transition-all duration-500" 
+                        alt="Profile"
+                    />
+                    
+                    {/* Progress Bars (Like Instagram Stories) */}
+                    <div className="absolute top-2 left-2 right-2 flex gap-1 z-20">
+                        {photos.map((_, i) => (
+                            <div 
+                                key={i} 
+                                className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i === currentPhotoIndex ? 'bg-white' : 'bg-white/30'}`} 
+                            />
+                        ))}
                     </div>
-                    {photos.slice(1, 3).map((photo, i) => (
-                         <div 
-                            key={i} 
-                            className="aspect-square rounded-xl overflow-hidden border border-slate-800 cursor-pointer"
-                            onClick={() => setSelectedPhoto(photo)}
-                        >
-                            <img src={photo} className="w-full h-full object-cover hover:opacity-80 transition" />
-                        </div>
-                    ))}
+
+                    {/* Navigation Areas (Invisible Tap Zones) */}
+                    <div className="absolute inset-0 flex z-10">
+                        <div className="w-1/3 h-full" onClick={prevPhoto} />
+                        <div className="w-1/3 h-full" onClick={openFullScreen} /> {/* Center tap opens full screen */}
+                        <div className="w-1/3 h-full" onClick={nextPhoto} />
+                    </div>
+
+                    {/* Arrows (Visible on hover or touch) */}
+                    {photos.length > 1 && (
+                        <>
+                            <button onClick={prevPhoto} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition pointer-events-none z-20">
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <button onClick={nextPhoto} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition pointer-events-none z-20">
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </>
+                    )}
                 </div>
 
                 <h2 className="text-3xl font-bold mb-2 text-center">{profile.display_name || profile.full_name}</h2>
@@ -191,13 +233,10 @@ export default function PublicProfile() {
                     </Badge>
                 </div>
 
+                {/* Shared History Component */}
                 <SharedHistory targetUserId={userId} />
 
-                {/* 🟢 THE SMART BUTTON LOGIC */}
-                {/* 1. NOT Me */}
-                {/* 2. Female */}
-                {/* 3. SAME LOCATION (The Gatekeeper) */}
-                {/* 4. Not already sent */}
+                {/* THE SMART BUTTON LOGIC */}
                 {isFemale && !isMe && isSameLocation && status === null && (
                     <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
                         <Button 
@@ -210,7 +249,6 @@ export default function PublicProfile() {
                     </div>
                 )}
 
-                {/* SHOW "SENT" (Even if I left the venue, I want to know I tried) */}
                 {isFemale && !isMe && status === 'pending' && (
                     <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
                         <Button disabled className="w-full h-14 text-lg font-bold bg-slate-800 text-slate-400 border border-slate-700 rounded-2xl">
@@ -220,7 +258,7 @@ export default function PublicProfile() {
                 )}
             </div>
 
-            {/* LIGHTBOX */}
+            {/* FULL SCREEN LIGHTBOX */}
             {selectedPhoto && (
                 <div 
                     className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
