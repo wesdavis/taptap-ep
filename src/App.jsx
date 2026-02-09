@@ -10,6 +10,7 @@ import ProfileSetup from './pages/ProfileSetup';
 import PublicProfile from './pages/PublicProfile';
 import LocationDetails from './pages/LocationDetails'; 
 import Achievements from './pages/Achievements';
+import GlobalNotificationLayer from './components/GlobalNotificationLayer'; // 🟢 Import
 
 const queryClient = new QueryClient();
 
@@ -47,17 +48,17 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <Router>
-          <PingListener />
-          <div className="min-h-screen bg-slate-950"> 
-             <AuthenticatedApp />
-          </div>
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
-  )
+    <BrowserRouter>
+      <AuthProvider>
+        
+        {/* 🟢 PLACE THIS HERE, INSIDE AUTH PROVIDER */}
+        <GlobalNotificationLayer />
+
+        <Routes>
+           {/* ... your routes ... */}
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
 export default App;
