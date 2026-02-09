@@ -118,7 +118,7 @@ export default function Settings() {
 
                 {/* Footer Info */}
                 <div className="text-center text-xs text-slate-700 mt-12 space-y-1">
-                    <p className="font-mono">HiRL v1.0.4 (Alpha)</p>
+                    <p className="font-mono">TapTap v1.0.4 (Alpha)</p>
                     <p>Built with ⚡️ in El Paso, TX</p>
                 </div>
 

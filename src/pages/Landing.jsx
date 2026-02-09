@@ -26,7 +26,7 @@ export default function Landing() {
                             <Zap className="text-black w-6 h-6 fill-black" />
                         </div>
                         <span className="text-2xl font-black tracking-tight text-white">
-                            HiRL
+                            TapTap
                         </span>
                     </div>
                     <div className="flex gap-4">
@@ -65,9 +65,9 @@ export default function Landing() {
                             </div>
 
                             <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight leading-[1.1]">
-                                Real Life is <br />
+                                No More Swiping <br />
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-amber-600">
-                                    Better Offline.
+                                    Meet People IRL
                                 </span>
                             </h1>
 
@@ -185,7 +185,7 @@ export default function Landing() {
                 </div>
 
                 <footer className="py-8 border-t border-slate-900 text-center text-slate-600 text-sm">
-                    © {new Date().getFullYear()} HiRL Inc. Built in El Paso.
+                    © {new Date().getFullYear()} TapTap. Built in El Paso.
                 </footer>
             </div>
         </div>
