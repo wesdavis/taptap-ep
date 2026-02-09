@@ -14,9 +14,6 @@ import { toast } from 'sonner';
 import * as tf from '@tensorflow/tfjs';
 import * as nsfwjs from 'nsfwjs';
 
-// 🟢 API KEY
-const GOOGLE_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
-
 export default function ProfileSetup() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -39,6 +36,8 @@ export default function ProfileSetup() {
     full_name: '',
     handle: '',
     gender: '',
+    birth_date: '', // 🟢 NEW
+    relationship_status: '', // 🟢 NEW
     bio: '',
     avatar_url: '',
     photos: [],
@@ -72,6 +71,8 @@ export default function ProfileSetup() {
             full_name: data.display_name || data.full_name || '',
             handle: data.handle || '',
             gender: data.gender || '',
+            birth_date: data.birth_date || '', // 🟢 NEW: Load existing data
+            relationship_status: data.relationship_status || '', // 🟢 NEW
             bio: data.bio || '',
             avatar_url: data.avatar_url || '',
             photos: data.photos || [],
@@ -98,7 +99,7 @@ export default function ProfileSetup() {
       }
   }
 
-  // 🟢 2. THE AI SCANNER FUNCTION
+  // 2. THE AI SCANNER FUNCTION
   const checkSafety = async (file) => {
       if (!model) return true; // Fail safe if model didn't load
       
@@ -191,9 +192,11 @@ export default function ProfileSetup() {
         const { error } = await supabase.from('profiles').upsert({
             id: user.id,
             full_name: formData.full_name,
-            display_name: formData.full_name, // Sync display name
+            display_name: formData.full_name, 
             handle: cleanHandle,
             gender: formData.gender,
+            birth_date: formData.birth_date, // 🟢 NEW: Save to DB
+            relationship_status: formData.relationship_status, // 🟢 NEW: Save to DB
             bio: formData.bio,
             avatar_url: finalAvatar, 
             photos: formData.photos, 
@@ -205,6 +208,7 @@ export default function ProfileSetup() {
         navigate('/'); 
     } catch (error) {
         toast.error("Error updating profile");
+        console.error(error);
     } finally {
         setSaving(false);
     }
@@ -270,6 +274,8 @@ export default function ProfileSetup() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* PHOTOS SECTION */}
             <div className="space-y-3">
                 <Label>Your Photos</Label>
                 <div className="grid grid-cols-3 gap-3">
@@ -299,8 +305,10 @@ export default function ProfileSetup() {
                 </div>
             </div>
 
+            {/* BASIC INFO */}
             <div className="space-y-2"><Label>Display Name</Label><Input required value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             <div className="space-y-2"><Label>Handle (@)</Label><Input required value={formData.handle} onChange={e => setFormData({...formData, handle: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
+            
             <div className="space-y-2">
                 <Label>Gender</Label>
                 <Select value={formData.gender} onValueChange={val => setFormData({...formData, gender: val})}>
@@ -312,6 +320,32 @@ export default function ProfileSetup() {
                     </SelectContent>
                 </Select>
             </div>
+
+            {/* 🟢 NEW: DEMOGRAPHICS SECTION */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>Birthday</Label>
+                    <Input 
+                        type="date" 
+                        required
+                        value={formData.birth_date} 
+                        onChange={e => setFormData({...formData, birth_date: e.target.value})}
+                        className="bg-slate-900 border-slate-800" 
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={formData.relationship_status} onValueChange={val => setFormData({...formData, relationship_status: val})}>
+                        <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                            <SelectItem value="Single">Single</SelectItem>
+                            <SelectItem value="Taken">Taken</SelectItem>
+                            <SelectItem value="Complicated">It's Complicated</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             <div className="space-y-2"><Label>Bio</Label><Textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">{saving ? <Loader2 className="animate-spin" /> : "Save Changes"}</Button>
         </form>

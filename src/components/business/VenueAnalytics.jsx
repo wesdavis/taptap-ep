@@ -1,99 +1,217 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { BarChart, ArrowUp, Users, Clock } from 'lucide-react';
+import { 
+    BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, 
+    AreaChart, Area, PieChart, Pie, Cell, Legend 
+} from 'recharts';
+import { Users, TrendingUp, Heart, Activity, Calendar } from 'lucide-react';
+
+const COLORS = ['#f59e0b', '#3b82f6', '#ec4899', '#10b981']; // Amber, Blue, Pink, Green
 
 export default function VenueAnalytics({ locationId }) {
-    const [stats, setStats] = useState({
-        total: 0,
-        male: 0,
-        female: 0,
-        today: 0,
-        activeNow: 0
-    });
     const [loading, setLoading] = useState(true);
+    const [summary, setSummary] = useState({ total: 0, activeNow: 0, today: 0 });
+    
+    // Chart Data
+    const [hourlyData, setHourlyData] = useState([]);
+    const [ageData, setAgeData] = useState([]);
+    const [statusData, setStatusData] = useState([]);
 
-    useEffect(() => {
+    const fetchStats = async () => {
         if (!locationId) return;
 
-        async function fetchStats() {
-            // 1. Get History (All time checkins)
-            const { data: checkins } = await supabase
-                .from('checkins')
-                .select(`created_at, is_active, profiles ( gender )`)
-                .eq('location_id', locationId);
+        // 1. Get Checkins with Profile Data
+        const { data: checkins } = await supabase
+            .from('checkins')
+            .select(`
+                created_at, 
+                is_active, 
+                profiles ( birth_date, relationship_status, gender )
+            `)
+            .eq('location_id', locationId);
 
-            if (checkins) {
-                let male = 0;
-                let female = 0;
-                let todayCount = 0;
-                let active = 0;
-                const todayStr = new Date().toDateString();
-
-                checkins.forEach(c => {
-                    // Demographics
-                    const g = c.profiles?.gender;
-                    if (g === 'Male') male++;
-                    if (g === 'Female') female++;
-
-                    // Timing
-                    if (new Date(c.created_at).toDateString() === todayStr) todayCount++;
-                    if (c.is_active) active++;
-                });
-
-                setStats({
-                    total: checkins.length,
-                    male,
-                    female,
-                    today: todayCount,
-                    activeNow: active
-                });
-            }
-            setLoading(false);
+        if (checkins) {
+            processData(checkins);
         }
-        fetchStats();
+        setLoading(false);
+    };
+
+    // 🟢 REAL-TIME LISTENER
+    useEffect(() => {
+        fetchStats(); // Initial Fetch
+
+        // Subscribe to NEW Checkins or UPDATES (Checkouts)
+        const subscription = supabase
+            .channel('venue-analytics')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'checkins', 
+                filter: `location_id=eq.${locationId}` 
+            }, (payload) => {
+                console.log("⚡️ Real-time update:", payload);
+                fetchStats(); // Re-fetch logic to update charts
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(subscription); };
     }, [locationId]);
 
-    if (loading) return <div className="animate-pulse h-32 bg-slate-900 rounded-xl"></div>;
+    const processData = (data) => {
+        const todayStr = new Date().toDateString();
+        let active = 0;
+        let todayCount = 0;
+        
+        // 1. Hourly Traffic (For Today)
+        const hoursMap = new Array(24).fill(0);
+        
+        // 2. Age Buckets
+        const ageMap = { '18-24': 0, '25-34': 0, '35-44': 0, '45+': 0 };
+        
+        // 3. Status Map
+        const statusMap = { 'Single': 0, 'Taken': 0, 'Complicated': 0 };
 
-    const malePct = stats.total > 0 ? Math.round((stats.male / stats.total) * 100) : 0;
-    const femalePct = stats.total > 0 ? Math.round((stats.female / stats.total) * 100) : 0;
+        data.forEach(c => {
+            if (c.is_active) active++;
+            const date = new Date(c.created_at);
+            
+            // Is it today?
+            if (date.toDateString() === todayStr) {
+                todayCount++;
+                hoursMap[date.getHours()]++;
+            }
+
+            // Demographics
+            if (c.profiles) {
+                // Status
+                const s = c.profiles.relationship_status;
+                if (s && statusMap[s] !== undefined) statusMap[s]++;
+
+                // Age
+                if (c.profiles.birth_date) {
+                    const dob = new Date(c.profiles.birth_date);
+                    const ageDiff = Date.now() - dob.getTime();
+                    const age = Math.abs(new Date(ageDiff).getUTCFullYear() - 1970);
+                    
+                    if (age < 25) ageMap['18-24']++;
+                    else if (age < 35) ageMap['25-34']++;
+                    else if (age < 45) ageMap['35-44']++;
+                    else ageMap['45+']++;
+                }
+            }
+        });
+
+        // Set States
+        setSummary({ total: data.length, activeNow: active, today: todayCount });
+        
+        // Format for Recharts
+        setHourlyData(hoursMap.map((count, hour) => ({
+            name: `${hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)}${hour >= 12 ? 'pm' : 'am'}`,
+            visitors: count
+        })));
+
+        setAgeData(Object.keys(ageMap).map(key => ({ name: key, count: ageMap[key] })));
+        
+        setStatusData(Object.keys(statusMap)
+            .filter(k => statusMap[k] > 0) // Only show if data exists
+            .map(k => ({ name: k, value: statusMap[k] }))
+        );
+    };
+
+    if (loading) return <div className="animate-pulse h-64 bg-slate-900 rounded-xl"></div>;
 
     return (
-        <div className="space-y-4">
-            {/* LIVE PULSE */}
-            <div className="bg-gradient-to-r from-emerald-900/50 to-slate-900 border border-emerald-500/30 p-4 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
-                    <div>
-                        <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Live Now</div>
-                        <div className="text-white font-medium text-sm">{stats.activeNow} Customers Active</div>
+        <div className="space-y-6 animate-in fade-in duration-500">
+            
+            {/* 1. HEADLINE CARDS */}
+            <div className="grid grid-cols-3 gap-4">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
+                    <div className="text-emerald-500 text-xs uppercase font-bold mb-1 flex justify-center items-center gap-1"><Activity className="w-3 h-3" /> Live</div>
+                    <div className="text-3xl font-black text-white">{summary.activeNow}</div>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
+                    <div className="text-blue-500 text-xs uppercase font-bold mb-1 flex justify-center items-center gap-1"><Calendar className="w-3 h-3" /> Today</div>
+                    <div className="text-3xl font-black text-white">{summary.today}</div>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
+                    <div className="text-slate-500 text-xs uppercase font-bold mb-1">Total</div>
+                    <div className="text-3xl font-black text-white">{summary.total}</div>
+                </div>
+            </div>
+
+            {/* 2. HOURLY TRAFFIC (Area Chart) */}
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-amber-500" /> Hourly Traffic (Today)
+                </h3>
+                <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={hourlyData}>
+                            <defs>
+                                <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <XAxis dataKey="name" tick={{fontSize: 10, fill: '#64748b'}} interval={3} />
+                            <RechartsTooltip 
+                                contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff'}} 
+                                itemStyle={{color: '#f59e0b'}}
+                            />
+                            <Area type="monotone" dataKey="visitors" stroke="#f59e0b" fillOpacity={1} fill="url(#colorVisits)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* 3. RELATIONSHIP STATUS (Donut Chart) */}
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+                    <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                        <Heart className="w-4 h-4 text-pink-500" /> Crowd Vibe
+                    </h3>
+                    <div className="h-40 w-full relative">
+                        {statusData.length > 0 ? (
+                            <ResponsiveContainer>
+                                <PieChart>
+                                    <Pie 
+                                        data={statusData} 
+                                        innerRadius={40} 
+                                        outerRadius={60} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                    >
+                                        {statusData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155'}} />
+                                    <Legend verticalAlign="middle" align="right" layout="vertical" iconSize={8} wrapperStyle={{fontSize: '10px'}} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-600">No data yet</div>
+                        )}
                     </div>
                 </div>
-                <Users className="text-emerald-500 w-5 h-5" />
-            </div>
 
-            {/* BIG STATS */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
-                    <div className="text-slate-500 text-xs uppercase font-bold mb-1">Visits Today</div>
-                    <div className="text-3xl font-black text-white">{stats.today}</div>
+                {/* 4. AGE GROUPS (Bar Chart) */}
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+                    <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-blue-500" /> Age Groups
+                    </h3>
+                    <div className="h-40 w-full">
+                         <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={ageData}>
+                                <XAxis dataKey="name" tick={{fontSize: 10, fill: '#64748b'}} />
+                                <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155'}} />
+                                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
-                    <div className="text-slate-500 text-xs uppercase font-bold mb-1">Total History</div>
-                    <div className="text-3xl font-black text-white">{stats.total}</div>
-                </div>
-            </div>
 
-            {/* GENDER SPLIT */}
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                <div className="flex justify-between text-xs font-bold text-slate-400 uppercase mb-2">
-                    <span>Male ({malePct}%)</span>
-                    <span>Female ({femalePct}%)</span>
-                </div>
-                <div className="h-4 w-full bg-slate-800 rounded-full overflow-hidden flex">
-                    <div style={{ width: `${malePct}%` }} className="h-full bg-blue-500" />
-                    <div style={{ width: `${femalePct}%` }} className="h-full bg-pink-500" />
-                </div>
             </div>
         </div>
     );
