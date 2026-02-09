@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Camera, Crown, Calendar } from 'lucide-react';
 import UserGrid from '../components/location/UserGrid'; 
+import VenueAnalytics from '../components/business/VenueAnalytics'; // 🟢 NEW IMPORT
 import { toast } from 'sonner';
 
 // 🟢 API KEY
@@ -20,24 +21,27 @@ const LocationDetails = () => {
   const [loading, setLoading] = useState(true);
   const [checkingLocation, setCheckingLocation] = useState(false);
   const [gridRefreshKey, setGridRefreshKey] = useState(0);
+  
+  // 🟢 NEW: Admin State
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const fetchLocationData = async () => {
       try {
         setLoading(true);
-        // Get Location Info
+        // 1. Get Location Info
         const { data: locData, error } = await supabase.from('locations').select('*').eq('id', id).single();
         if (error) throw error;
         setLocation(locData);
 
-        // Get Check-in Count
+        // 2. Get Check-in Count
         const { count } = await supabase.from('checkins')
           .select('*', { count: 'exact', head: true })
           .eq('location_id', id)
           .eq('is_active', true);
         setActiveCount(count || 0);
 
-        // Check if I am checked in
+        // 3. Check if I am checked in AND if I am an Admin
         if (user) {
            const { data: myCheckin } = await supabase.from('checkins')
              .select('*')
@@ -46,6 +50,10 @@ const LocationDetails = () => {
              .eq('is_active', true)
              .maybeSingle();
            if (myCheckin) setCheckedIn(true);
+
+           // 🟢 Fetch Profile to check Admin Status
+           const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+           if (profile?.is_admin) setIsAdmin(true);
         }
       } catch (err) { console.error(err); } 
       finally { setLoading(false); }
@@ -288,18 +296,25 @@ const LocationDetails = () => {
             {location.description || "Join the local scene at this venue."}
         </p>
 
-        {/* 🟢 YOUR HISTORY AT THIS LOCATION (Inserted Here) */}
+        {/* YOUR HISTORY AT THIS LOCATION */}
         <div className="mt-8 border-t border-slate-800 pt-6 px-4">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Your History Here</h3>
             <LocationHistory locationId={id} />
         </div>
+
+        {/* 🟢 SHOW ANALYTICS IF ADMIN */}
+        {isAdmin && (
+            <div className="mt-8 animate-in slide-in-from-bottom-10 fade-in duration-500">
+                <VenueAnalytics locationId={id} />
+            </div>
+        )}
 
       </div>
     </div>
   );
 };
 
-// 🟢 Sub-Component: Location History
+// Sub-Component: Location History
 function LocationHistory({ locationId }) {
     const { user } = useAuth();
     const [history, setHistory] = useState([]);
@@ -312,7 +327,6 @@ function LocationHistory({ locationId }) {
                 .eq('user_id', user.id).eq('location_id', locationId)
                 .order('created_at', { ascending: false });
             
-            // Note: We could merge 'meetings' here too, but start simple
             setHistory(visits || []);
         }
         if (user) load();
