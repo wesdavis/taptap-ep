@@ -33,7 +33,7 @@ const AuthenticatedApp = () => {
     if (user) {
       // 1. Initialize OneSignal
       OneSignal.init({
-        appId: "YOUR-ONESIGNAL-APP-ID-HERE", // ⚠️ MAKE SURE THIS IS FILLED IN
+        appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", // ⚠️ MAKE SURE THIS IS FILLED IN
         allowLocalhostAsSecureOrigin: true,
       }).then(async () => {
         console.log("OneSignal Initialized");
