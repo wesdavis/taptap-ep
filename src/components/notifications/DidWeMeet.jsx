@@ -58,7 +58,7 @@ export default function DidWeMeet({ ping, onConfirm }) {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg animate-in slide-in-from-top-2 relative z-30">
             <div className="flex items-center justify-between mb-3">
                 <h3 className="text-white font-bold flex items-center gap-2">
-                    Did you meet?
+                    It's time to say hello...
                 </h3>
                 <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
                     {new Date(ping.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -75,7 +75,7 @@ export default function DidWeMeet({ ping, onConfirm }) {
                 </div>
                 <div>
                     <p className="text-sm text-slate-300">
-                        You tapped <span className="text-white font-bold">@{otherUser?.handle || 'User'}</span>
+                        Did you meet <span className="text-white font-bold">@{otherUser?.handle || 'User'}</span>
                     </p>
                     <p className="text-xs text-slate-500 italic">
                         {ping.locations?.name || "at this location"}
