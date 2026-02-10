@@ -11,13 +11,11 @@ import PlacesList from '@/components/profile/PlacesList';
 import ConnectionsList from '@/components/profile/ConnectionsList'; 
 import UserGrid from '@/components/location/UserGrid'; 
 
-import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Loader2, Navigation, Settings as SettingsIcon } from 'lucide-react';
+import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Loader2, Navigation, Settings as SettingsIcon, Footprints } from 'lucide-react';
 import { toast } from 'sonner';
 
-// 🟢 API KEY
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
-// Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; 
   const R = 6371e3; 
@@ -27,7 +25,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const Δλ = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ1) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c * 0.000621371; // Miles
+  return R * c * 0.000621371; 
 };
 
 const Home = () => {
@@ -37,9 +35,11 @@ const Home = () => {
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
   
-  // 🟢 STATE FIX: Initialize as empty arrays
   const [sentPings, setSentPings] = useState([]); 
-  const [receivedPings, setReceivedPings] = useState([]);     
+  const [receivedPings, setReceivedPings] = useState([]); 
+  
+  // 🟢 NEW: Track active "Missions" (Revealed but not met)
+  const [activeMission, setActiveMission] = useState(null);    
   
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +50,6 @@ const Home = () => {
   const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 });
   const [expandedSection, setExpandedSection] = useState(null); 
   
-  // Quick Check-In Loading State
   const [checkingInId, setCheckingInId] = useState(null);
 
   useEffect(() => {
@@ -59,15 +58,6 @@ const Home = () => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setUserCoords({ latitude: lat, longitude: lng });
-
-        try {
-            const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`);
-            const data = await res.json();
-            if (data.results && data.results.length > 0) {
-                const cityObj = data.results[0].address_components.find(c => c.types.includes("locality"));
-                if (cityObj) setCurrentCity(cityObj.long_name);
-            }
-        } catch (err) { console.error("City fetch failed", err); }
       });
     }
   }, []);
@@ -80,7 +70,7 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // 🟢 FIX 1: STRICTER QUERIES
+          // 1. Sent Pings (Waiting for confirmation)
           const { data: sentData } = await supabase.from('pings')
             .select(`*, receiver:profiles!to_user_id(*)`)
             .eq('from_user_id', user.id)
@@ -88,12 +78,26 @@ const Home = () => {
             .order('created_at', { ascending: false });
           setSentPings(sentData || []);
 
+          // 2. Received Pings (Pending Reveal)
           const { data: receivedData } = await supabase.from('pings')
             .select(`*, sender:profiles!from_user_id(*)`)
             .eq('to_user_id', user.id)
             .eq('status', 'pending') 
             .order('created_at', { ascending: false });
           setReceivedPings(receivedData || []);
+
+          // 🟢 3. FIND ACTIVE MISSION (Revealed but not confirmed met)
+          const { data: missionData } = await supabase.from('pings')
+            .select(`*, sender:profiles!from_user_id(*)`)
+            .eq('to_user_id', user.id)
+            .eq('status', 'revealed')
+            .is('met_confirmed', null)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+          
+          if (missionData && missionData.length > 0) {
+              setActiveMission(missionData[0]);
+          }
 
           const { data: myCheckIn } = await supabase.from('checkins').select(`*, locations (*)`).eq('user_id', user.id).eq('is_active', true).maybeSingle();
           setCurrentCheckIn(myCheckIn);
@@ -104,7 +108,7 @@ const Home = () => {
           setActiveUsersAtLocation(counts);
 
           const { count: visitedCount } = await supabase.from('checkins').select('location_id', { count: 'exact', head: true }).eq('user_id', user.id); 
-          const { count: metCount } = await supabase.from('pings').select('id', { count: 'exact', head: true }).or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`).eq('status', 'accepted'); 
+          const { count: metCount } = await supabase.from('pings').select('id', { count: 'exact', head: true }).or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`).eq('met_confirmed', true); 
           setStats({ peopleMet: metCount || 0, placesVisited: visitedCount || 0 });
         }
 
@@ -118,7 +122,6 @@ const Home = () => {
   const handleCheckOut = async () => {
     const checkinId = currentCheckIn?.id;
     if (!checkinId) return;
-
     try {
         await supabase.from('checkins').update({ is_active: false }).eq('id', checkinId);
         setCurrentCheckIn(null);
@@ -129,47 +132,20 @@ const Home = () => {
   const handleQuickCheckIn = async (e, loc) => {
       e.stopPropagation(); 
       if (!userCoords) { toast.error("Waiting for GPS..."); return; }
-
       const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
-      if (dist > 0.5) { 
-          toast.error(`Too far! You are ${dist.toFixed(1)} miles away.`); 
-          return; 
-      }
-
+      if (dist > 0.5) { toast.error(`Too far! You are ${dist.toFixed(1)} miles away.`); return; }
       setCheckingInId(loc.id);
       try {
           await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
-          
           const { data, error } = await supabase.from('checkins').insert({
-              user_id: user.id,
-              location_id: loc.id,
-              is_active: true
+              user_id: user.id, location_id: loc.id, is_active: true
           }).select(`*, locations (*)`).single();
-          
           if (error) throw error;
-          
           setCurrentCheckIn(data);
           toast.success(`Checked into ${loc.name}!`);
           setActiveUsersAtLocation(prev => ({ ...prev, [loc.id]: (prev[loc.id] || 0) + 1 }));
-
-      } catch(e) { 
-          toast.error("Check-in failed. Try again."); 
-      } finally { 
-          setCheckingInId(null); 
-      }
+      } catch(e) { toast.error("Check-in failed. Try again."); } finally { setCheckingInId(null); }
   }
-
-  useEffect(() => {
-    if (currentCheckIn && userCoords && currentCheckIn.locations) {
-      const loc = currentCheckIn.locations;
-      const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
-      
-      if (dist > 1.0) {
-        handleCheckOut();
-        toast.info(`You have been checked out of ${loc.name} because you left the area.`);
-      }
-    }
-  }, [userCoords, currentCheckIn]);
 
   const getPartyVibe = (count) => {
       if (count >= 10) return { label: "PACKED 🚨", color: "text-red-500 bg-red-500/10 border-red-500/20" };
@@ -198,14 +174,44 @@ const Home = () => {
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
       
-      {/* 🟢 FIX 2: STRICT FILTERING FOR POPUP */}
+      {/* MYSTERY POPUP */}
       {receivedPings.length > 0 && (
           <MysteryPopup 
             pings={receivedPings} 
             onDismiss={(idToDismiss) => { 
-                setReceivedPings(current => current.filter(p => p.id !== idToDismiss)); 
+                setReceivedPings(current => current.filter(p => p.id !== idToDismiss));
+                // 🟢 When dismissed, trigger a refresh to find it as a "Mission"? 
+                // Actually, next load will catch it, or we can assume it becomes active.
+                window.location.reload(); // Quick hack to refresh active mission state
             }} 
           />
+      )}
+
+      {/* 🟢 FIX #23: THE GOLD MISSION BAR */}
+      {activeMission && (
+        <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 p-0.5 animate-in slide-in-from-top duration-500 sticky top-0 z-50 shadow-xl shadow-amber-500/20">
+            <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                        </span>
+                        <img src={activeMission.sender?.avatar_url} className="w-10 h-10 rounded-full border-2 border-amber-500" alt="Mission" />
+                    </div>
+                    <div>
+                        <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest">Current Mission</p>
+                        <p className="text-white font-bold text-sm leading-none">Find {activeMission.sender?.display_name}</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => navigate(`/user/${activeMission.sender?.id}`)}
+                    className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1 transition shadow-lg"
+                >
+                    <Footprints className="w-3 h-3 fill-black" /> GO
+                </button>
+            </div>
+        </div>
       )}
 
       {/* HEADER */}
@@ -226,7 +232,7 @@ const Home = () => {
         <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
       </div>
 
-      {/* 🟢 FIX 3: DID WE MEET SECTION */}
+      {/* DID WE MEET */}
       <div className="space-y-4 px-4 -mt-4 relative z-20">
          {sentPings.map(ping => ( 
              <DidWeMeet 
@@ -239,12 +245,11 @@ const Home = () => {
          ))}
       </div>
 
-      {/* ACTIVE LOCATION CARD + USER GRID */}
+      {/* ACTIVE LOCATION */}
       {currentCheckIn && (
         <div className="px-4 mb-8 mt-6">
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-amber-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                
                 <div className="flex justify-between items-start mb-6 relative z-10">
                     <div>
                         <span className="flex items-center gap-1.5 text-green-400 text-xs font-bold uppercase tracking-wider mb-1">Live Mode Active</span>
@@ -252,10 +257,7 @@ const Home = () => {
                     </div>
                     <button onClick={handleCheckOut} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition"><LogOut className="w-5 h-5" /></button>
                 </div>
-
-                <div className="mt-4">
-                    <UserGrid locationId={currentCheckIn.location_id} />
-                </div>
+                <div className="mt-4"><UserGrid locationId={currentCheckIn.location_id} /></div>
             </div>
         </div>
       )}
@@ -287,14 +289,8 @@ const Home = () => {
                     <div className="relative w-16 h-16 shrink-0"><img src={(promotedLocation.google_photos && promotedLocation.google_photos.length > 0) ? `https://places.googleapis.com/v1/${promotedLocation.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400` : (promotedLocation.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400")} alt={promotedLocation.name} className="w-full h-full object-cover rounded-lg border border-amber-500/30" /></div>
                     <ChevronRight className="w-4 h-4 text-amber-500 ml-2" />
                 </div>
-                
-                <button 
-                    onClick={(e) => handleQuickCheckIn(e, promotedLocation)}
-                    disabled={checkingInId === promotedLocation.id} 
-                    className="mt-3 w-full py-2 bg-amber-500 text-black font-bold text-xs rounded-lg flex items-center justify-center gap-2 shadow-lg active:scale-95 transition hover:bg-amber-400 disabled:opacity-70"
-                >
-                    {checkingInId === promotedLocation.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3 fill-black" />} 
-                    {checkingInId === promotedLocation.id ? "Checking In..." : "Check In Here"}
+                <button onClick={(e) => handleQuickCheckIn(e, promotedLocation)} disabled={checkingInId === promotedLocation.id} className="mt-3 w-full py-2 bg-amber-500 text-black font-bold text-xs rounded-lg flex items-center justify-center gap-2 shadow-lg active:scale-95 transition hover:bg-amber-400 disabled:opacity-70">
+                    {checkingInId === promotedLocation.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3 fill-black" />} {checkingInId === promotedLocation.id ? "Checking In..." : "Check In Here"}
                 </button>
             </div>
         )}
@@ -317,14 +313,8 @@ const Home = () => {
                     </div>
                     <div className="relative w-16 h-16 shrink-0"><img src={imageUrl} alt={loc.name} className="w-full h-full object-cover rounded-lg border border-slate-700" loading="lazy" /></div>
                 </div>
-                
-                <button 
-                    onClick={(e) => handleQuickCheckIn(e, loc)}
-                    disabled={checkingInId === loc.id} 
-                    className="w-full py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-lg flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 active:scale-95 transition disabled:opacity-50"
-                >
-                    {checkingInId === loc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />} 
-                    {checkingInId === loc.id ? "Checking In..." : "Quick Check In"}
+                <button onClick={(e) => handleQuickCheckIn(e, loc)} disabled={checkingInId === loc.id} className="w-full py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-lg flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 active:scale-95 transition disabled:opacity-50">
+                    {checkingInId === loc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />} {checkingInId === loc.id ? "Checking In..." : "Quick Check In"}
                 </button>
               </div>
             );
@@ -332,7 +322,12 @@ const Home = () => {
       </div>
 
       <div className="px-4 py-6"><div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div></div>
-      <div className="px-4 space-y-4"><h2 className="text-lg font-bold flex items-center gap-2"><Users className="w-5 h-5 text-amber-500" /> Recent Connections</h2><PeopleMetList /></div>
+      
+      {/* 🟢 FIX #22: RECENT CONNECTIONS LIST */}
+      <div className="px-4 space-y-4">
+          <h2 className="text-lg font-bold flex items-center gap-2"><Users className="w-5 h-5 text-amber-500" /> Recent Connections</h2>
+          <PeopleMetList />
+      </div>
       
       <div className="mt-8 mx-4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300">
           <div className="grid grid-cols-2 p-4 text-center">

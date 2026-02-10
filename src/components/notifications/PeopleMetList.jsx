@@ -1,93 +1,83 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useNavigate } from 'react-router-dom';
 
-export default function PeopleMetList({ onCountChange }) {
+export default function PeopleMetList() {
     const { user } = useAuth();
     const [people, setPeople] = useState([]);
+    const navigate = useNavigate();
 
-    useEffect(() => {
-        if (user) {
-            fetchPeopleMet();
+    const fetchPeople = async () => {
+        if (!user) return;
+        
+        // 🟢 Fetch pings where I was sender OR receiver, AND it is confirmed
+        const { data } = await supabase
+            .from('pings')
+            .select(`
+                id, 
+                created_at,
+                sender:profiles!from_user_id(id, display_name, avatar_url, handle),
+                receiver:profiles!to_user_id(id, display_name, avatar_url, handle)
+            `)
+            .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`)
+            .eq('met_confirmed', true) // Only confirmed meetings
+            .order('updated_at', { ascending: false })
+            .limit(10);
 
-            // 1. REALTIME LISTENER: Watch for "Yes" clicks
-            const channel = supabase
-                .channel('people_met_updates')
-                .on(
-                    'postgres_changes',
-                    { 
-                        event: 'UPDATE', 
-                        schema: 'public', 
-                        table: 'pings',
-                        filter: `met_confirmed=eq.true` 
-                    },
-                    () => {
-                        fetchPeopleMet(); // Refresh immediately
-                    }
-                )
-                .subscribe();
-
-            return () => supabase.removeChannel(channel);
+        if (data) {
+            // Process to find "The Other Person"
+            const formatted = data.map(ping => {
+                const isMeSender = ping.sender.id === user.id;
+                return {
+                    id: ping.id,
+                    metAt: ping.created_at,
+                    user: isMeSender ? ping.receiver : ping.sender
+                };
+            });
+            setPeople(formatted);
         }
+    };
+
+    // 🟢 Realtime Listener for instant updates
+    useEffect(() => {
+        fetchPeople();
+
+        const channel = supabase
+            .channel('people-met-list')
+            .on('postgres_changes', { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'pings', 
+                filter: `met_confirmed=eq.true` // Listen for confirmations
+            }, () => {
+                fetchPeople(); // Refresh list
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
     }, [user]);
 
-    async function fetchPeopleMet() {
-        try {
-            const isFemale = user.gender === 'Female';
-            // If I am female, I sent the ping (from_user_id), so I want the TO user
-            // If I am male, I received the ping (to_user_id), so I want the FROM user
-            const myColumn = isFemale ? 'from_user_id' : 'to_user_id';
-            const theirColumn = isFemale ? 'to_user_id' : 'from_user_id';
-
-            const { data, error } = await supabase
-                .from('pings')
-                .select(`
-                    other_user:profiles!${theirColumn} ( full_name, avatar_url )
-                `)
-                .eq(myColumn, user.id)
-                .eq('met_confirmed', true);
-
-            if (error) throw error;
-
-            if (data) {
-                // Filter out any null profiles to prevent crashes
-                const validPeople = data
-                    .map(p => p.other_user)
-                    .filter(user => user !== null);
-                
-                setPeople(validPeople);
-                
-                // 2. SYNC THE TALLY: Tell the parent component the real number
-                if (onCountChange) onCountChange(validPeople.length);
-            }
-        } catch (err) {
-            console.error("People Met Error:", err);
-        }
-    }
-
-    if (people.length === 0) return null;
+    if (people.length === 0) return <div className="text-slate-500 text-xs italic text-center py-4">No connections yet. Tap someone!</div>;
 
     return (
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 animate-in fade-in slide-in-from-bottom-2">
-            <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <Users className="w-4 h-4 text-green-500" /> People I've Met
-            </h3>
-            
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                {people.map((person, idx) => (
-                    <div key={idx} className="flex flex-col items-center min-w-[64px]">
-                        <Avatar className="w-14 h-14 border-2 border-green-500/50 mb-2">
-                            <AvatarImage src={person.avatar_url} />
-                            <AvatarFallback>{person.full_name?.[0]}</AvatarFallback>
+        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            {people.map((p) => (
+                <div key={p.id} onClick={() => navigate(`/user/${p.user.id}`)} className="flex flex-col items-center gap-1 min-w-[64px] cursor-pointer group">
+                    <div className="relative">
+                        <Avatar className="w-14 h-14 border-2 border-slate-800 group-hover:border-amber-500 transition">
+                            <AvatarImage src={p.user.avatar_url} />
+                            <AvatarFallback>{p.user.display_name?.[0]}</AvatarFallback>
                         </Avatar>
-                        <span className="text-xs text-slate-300 truncate w-full text-center">
-                            {person.full_name?.split(' ')[0] || 'User'}
-                        </span>
+                        {/* Green dot for 'Connected' */}
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-900 rounded-full"></div>
                     </div>
-                ))}
-            </div>
+                    <span className="text-[10px] text-slate-300 font-medium truncate w-full text-center">
+                        {p.user.display_name.split(' ')[0]}
+                    </span>
+                </div>
+            ))}
         </div>
     );
 }
