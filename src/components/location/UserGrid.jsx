@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Zap, Check, Loader2, User, Lock, Radio } from 'lucide-react'; 
+import { Zap, Check, Loader2, User, Lock, Radio, EyeOff } from 'lucide-react'; 
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -24,13 +24,15 @@ export default function UserGrid({ locationId }) {
     // Data State
     const [users, setUsers] = useState([]);
     const [myGender, setMyGender] = useState(null);
-    
+    const [amIHere, setAmIHere] = useState(false); // 🟢 NEW: Track if I am checked in
+    const [loading, setLoading] = useState(true);
+
     // Logic State
-    const [activeTapId, setActiveTapId] = useState(null); // ID of the person I am currently "Locked" to
+    const [activeTapId, setActiveTapId] = useState(null); 
     const [isTapLoading, setIsTapLoading] = useState(false);
     
     // Modal State
-    const [selectedTarget, setSelectedTarget] = useState(null); // { id, name } for modal
+    const [selectedTarget, setSelectedTarget] = useState(null); 
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const debounceTimer = useRef(null);
@@ -41,13 +43,11 @@ export default function UserGrid({ locationId }) {
             fetchUsersAndStatus();
         }
 
-        // Realtime Listener for Checkins (People arriving/leaving)
         const channel = supabase
             .channel(`grid-updates-optimized`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'checkins' }, () => {
                 refreshGrid();
             })
-            // Realtime Listener for Pings (If they reject/accept, unlock me)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'pings', filter: `from_user_id=eq.${user.id}` }, () => {
                 refreshGrid();
             })
@@ -69,7 +69,6 @@ export default function UserGrid({ locationId }) {
         if (data) setMyGender(data.gender);
     }
 
-    // 🟢 CORE LOGIC: Fetch Users AND Determine Lock State
     async function fetchUsersAndStatus() {
         try {
             // 1. Get Active Users at Location
@@ -84,54 +83,47 @@ export default function UserGrid({ locationId }) {
             const validUsers = activeUsers ? activeUsers.filter(u => u.profiles) : [];
             setUsers(validUsers);
 
-            // 2. Check if I am "Locked" to anyone here
-            if (user) {
+            // 🟢 2. SECURITY CHECK: Am I in this list?
+            const amICheckedIn = validUsers.some(u => u.user_id === user.id);
+            setAmIHere(amICheckedIn);
+
+            // 3. Check Lock State (Only if I am here)
+            if (amICheckedIn) {
                 const { data: myPings } = await supabase
                     .from('pings')
-                    .select('to_user_id, status, met_confirmed')
+                    .select('to_user_id, status')
                     .eq('from_user_id', user.id)
-                    .is('met_confirmed', null) // Only fetch unresolved pings
-                    .or('status.eq.pending,status.eq.revealed'); // Only active states
+                    .is('met_confirmed', null) 
+                    .or('status.eq.pending,status.eq.revealed');
 
                 if (myPings && myPings.length > 0) {
-                    // Check if the person I pinged is STILL at this location
-                    // If they left (checked out), the lock lifts automatically
                     const activePing = myPings.find(p => 
                         validUsers.some(u => u.user_id === p.to_user_id)
                     );
-
-                    if (activePing) {
-                        setActiveTapId(activePing.to_user_id);
-                    } else {
-                        setActiveTapId(null); // They left, so I am free
-                    }
+                    setActiveTapId(activePing ? activePing.to_user_id : null);
                 } else {
                     setActiveTapId(null);
                 }
             }
 
-        } catch (e) { console.log("Grid fetch error:", e); }
+        } catch (e) { console.log("Grid fetch error:", e); } finally { setLoading(false); }
     }
 
-    // 🟢 STEP 1: Open Confirmation Modal
     const initiateTap = (e, targetUserId, targetName) => {
         e.stopPropagation();
         setSelectedTarget({ id: targetUserId, name: targetName });
         setIsModalOpen(true);
     };
 
-    // 🟢 STEP 2: Execute Tap (After Confirmation)
     const handleConfirmTap = async () => {
         if (!selectedTarget) return;
-        
         setIsTapLoading(true);
-        setIsModalOpen(false); // Close modal immediately
+        setIsModalOpen(false); 
         
         const targetId = selectedTarget.id;
         const targetName = selectedTarget.name;
 
         try {
-            // Double check location (Security)
             const { data: myCheckin } = await supabase
                 .from('checkins')
                 .select('location_id')
@@ -152,9 +144,8 @@ export default function UserGrid({ locationId }) {
             });
 
             if (error) throw error;
-            
             toast.success(`Signal sent to ${targetName}!`);
-            setActiveTapId(targetId); // 🔒 LOCK THE GRID
+            setActiveTapId(targetId); 
 
         } catch (error) {
             console.error(error);
@@ -165,6 +156,38 @@ export default function UserGrid({ locationId }) {
         }
     };
 
+    if (loading) return <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-500"/></div>;
+
+    // 🟢 LURKER MODE: If I am not checked in, show blurry view
+    if (!amIHere) {
+        return (
+            <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-center">
+                {/* Blurry Background Layer */}
+                <div className="absolute inset-0 grid grid-cols-4 gap-4 p-4 opacity-20 blur-sm pointer-events-none">
+                     {[1,2,3,4,5,6,7,8].map(i => (
+                         <div key={i} className="flex flex-col items-center">
+                             <div className="w-14 h-14 rounded-full bg-slate-700"></div>
+                             <div className="h-2 w-10 bg-slate-700 mt-2 rounded"></div>
+                         </div>
+                     ))}
+                </div>
+                
+                {/* Content Layer */}
+                <div className="relative z-10 flex flex-col items-center justify-center py-4">
+                    <div className="bg-slate-900/80 p-4 rounded-full mb-3 border border-slate-700 shadow-xl">
+                        <EyeOff className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-white font-bold text-lg">Who's Here?</h3>
+                    <p className="text-slate-400 text-sm mb-4 max-w-[200px]">
+                        You must be checked in to see the crowd. No lurking allowed!
+                    </p>
+                    {/* We don't show a check-in button here because Home.jsx handles that, 
+                        but this confirms the state is locked. */}
+                </div>
+            </div>
+        );
+    }
+
     if (users.length === 0) return (
         <div className="p-8 text-center border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/30">
             <p className="text-slate-500 text-sm">No one else is here yet.</p>
@@ -172,7 +195,6 @@ export default function UserGrid({ locationId }) {
         </div>
     );
 
-    // Only females (or unspecified) can initiate pings in this model
     const canPing = (myGender || '').toLowerCase() === 'female' || !myGender;
 
     return (
@@ -193,10 +215,8 @@ export default function UserGrid({ locationId }) {
                     const isMe = item.user_id === user.id; 
                     const profile = item.profiles; 
                     const displayName = profile?.display_name || profile?.full_name || "Guest";
-                    
-                    // Logic for this specific card
                     const isTheTarget = activeTapId === item.user_id;
-                    const isLocked = activeTapId !== null && !isTheTarget; // Locked if I tapped someone else
+                    const isLocked = activeTapId !== null && !isTheTarget;
 
                     return (
                         <div key={item.user_id} className={`flex flex-col items-center group relative ${isLocked ? 'opacity-30 grayscale pointer-events-none' : ''}`}>
@@ -209,24 +229,16 @@ export default function UserGrid({ locationId }) {
                                         <AvatarImage src={profile?.avatar_url} className="object-cover" />
                                         <AvatarFallback><User className="w-6 h-6 text-slate-400" /></AvatarFallback>
                                     </Avatar>
-                                    
-                                    {/* Status Dot */}
                                     <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 border-2 border-slate-900 rounded-full ${isTheTarget ? 'bg-amber-500 animate-ping' : 'bg-green-500'}`}></div>
                                 </div>
                                 
-                                {/* TAP BUTTON LOGIC */}
                                 {canPing && !isMe && (
                                     <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10">
                                         {isTheTarget ? (
-                                            // 🟢 ACTIVE STATE: Waiting for him
                                             <div className="bg-slate-900 text-amber-500 text-[9px] font-black px-2 py-1 rounded-full border border-amber-500/50 flex items-center gap-1 shadow-lg whitespace-nowrap">
                                                 <Loader2 className="w-3 h-3 animate-spin" /> WAITING
                                             </div>
-                                        ) : isLocked ? (
-                                            // 🔴 LOCKED STATE: Someone else is active
-                                            null 
-                                        ) : (
-                                            // ⚪️ DEFAULT STATE: Ready to Tap
+                                        ) : isLocked ? null : (
                                             <Button
                                                 size="sm"
                                                 className="h-6 px-2 rounded-full text-[10px] font-bold shadow-lg bg-green-500 hover:bg-green-600 text-black flex items-center gap-1"
@@ -238,7 +250,6 @@ export default function UserGrid({ locationId }) {
                                     </div>
                                 )}
                             </div>
-
                             <span className={`text-xs truncate w-16 text-center ${isTheTarget ? 'text-amber-400 font-bold' : 'text-slate-300'}`}>
                                 {isMe ? "You" : displayName.split(' ')[0]}
                             </span>
@@ -247,7 +258,6 @@ export default function UserGrid({ locationId }) {
                 })}
             </div>
 
-            {/* CONFIRMATION MODAL */}
             <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <AlertDialogContent className="bg-slate-900 border border-slate-800 text-white w-[90%] rounded-2xl">
                     <AlertDialogHeader>
