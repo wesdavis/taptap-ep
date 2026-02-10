@@ -115,7 +115,7 @@ const Home = () => {
       // 2. Active Mission (Revealed but not confirmed) - Receiver Only (Female)
       const { data: missionData } = await supabase.from('pings')
         .select(`*, sender:profiles!from_user_id(*)`)
-        .eq('to_user_id', user.id) // 🟢 STRICT FILTER: Only if I am the Receiver
+        .eq('to_user_id', user.id)
         .eq('status', 'revealed')
         .is('met_confirmed', null) 
         .order('updated_at', { ascending: false })
@@ -195,9 +195,6 @@ const Home = () => {
           />
       )}
 
-      {/* 🟢 GOLD MISSION BAR (Replaced by DidWeMeet, but keeping activeMission logic alive for it) */}
-      {/* (Removed redundant bar code since DidWeMeet handles the display below) */}
-
       {/* HEADER */}
       <div className="relative w-full h-[45vh] min-h-[400px] bg-slate-900 rounded-b-[3rem] overflow-hidden shadow-2xl mb-8 group">
         {profile?.avatar_url ? (
@@ -216,8 +213,7 @@ const Home = () => {
         <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
       </div>
 
-      {/* 🟢 DID WE MEET CARD (For Receiver/Female Only) */}
-      {/* Shows ONLY if there is an active mission (confirmed female receiver) */}
+      {/* DID WE MEET CARD (For Receiver/Female Only) */}
       {activeMission && (
           <div className="space-y-4 px-4 -mt-4 relative z-20">
              <DidWeMeet 
@@ -307,7 +303,7 @@ const Home = () => {
 
       <div className="px-4 py-6"><div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div></div>
       
-      {/* 🟢 RECENT CONNECTIONS LIST (No horizontal list anymore, only vertical inside this box) */}
+      {/* 🟢 RECENT CONNECTIONS LIST */}
       <div className="mt-8 mx-4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300">
           <div className="grid grid-cols-2 p-4 text-center">
               <div onClick={() => setExpandedSection(expandedSection === 'people' ? null : 'people')} className={`space-y-1 cursor-pointer rounded-xl transition py-2 ${expandedSection === 'people' ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}><div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div><div className="text-2xl font-black text-white">{stats.peopleMet}</div><div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div></div>
