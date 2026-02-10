@@ -36,8 +36,11 @@ const Home = () => {
   
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
+  
+  // 🟢 STATE FIX: Initialize as empty arrays
   const [sentPings, setSentPings] = useState([]); 
   const [receivedPings, setReceivedPings] = useState([]);     
+  
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('distance'); 
@@ -77,10 +80,19 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          const { data: sentData } = await supabase.from('pings').select(`*, receiver:profiles!to_user_id(*)`).eq('from_user_id', user.id).is('met_confirmed', null).order('created_at', { ascending: false });
+          // 🟢 FIX 1: STRICTER QUERIES
+          const { data: sentData } = await supabase.from('pings')
+            .select(`*, receiver:profiles!to_user_id(*)`)
+            .eq('from_user_id', user.id)
+            .is('met_confirmed', null) 
+            .order('created_at', { ascending: false });
           setSentPings(sentData || []);
 
-          const { data: receivedData } = await supabase.from('pings').select(`*, sender:profiles!from_user_id(*)`).eq('to_user_id', user.id).is('met_confirmed', null).order('created_at', { ascending: false });
+          const { data: receivedData } = await supabase.from('pings')
+            .select(`*, sender:profiles!from_user_id(*)`)
+            .eq('to_user_id', user.id)
+            .eq('status', 'pending') 
+            .order('created_at', { ascending: false });
           setReceivedPings(receivedData || []);
 
           const { data: myCheckIn } = await supabase.from('checkins').select(`*, locations (*)`).eq('user_id', user.id).eq('is_active', true).maybeSingle();
@@ -186,11 +198,15 @@ const Home = () => {
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
       
-      {/* 🟢 FIXED: STRICT FILTER FOR PENDING PINGS */}
-      <MysteryPopup 
-        pings={receivedPings.filter(p => p.status === 'pending')} 
-        onDismiss={(id) => { setReceivedPings(prev => prev.filter(p => p.id !== id)); }} 
-      />
+      {/* 🟢 FIX 2: STRICT FILTERING FOR POPUP */}
+      {receivedPings.length > 0 && (
+          <MysteryPopup 
+            pings={receivedPings} 
+            onDismiss={(idToDismiss) => { 
+                setReceivedPings(current => current.filter(p => p.id !== idToDismiss)); 
+            }} 
+          />
+      )}
 
       {/* HEADER */}
       <div className="relative w-full h-[45vh] min-h-[400px] bg-slate-900 rounded-b-[3rem] overflow-hidden shadow-2xl mb-8 group">
@@ -210,9 +226,17 @@ const Home = () => {
         <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
       </div>
 
-      {/* DID WE MEET (Sender) */}
+      {/* 🟢 FIX 3: DID WE MEET SECTION */}
       <div className="space-y-4 px-4 -mt-4 relative z-20">
-         {sentPings.map(ping => ( <DidWeMeet key={ping.id} ping={ping} onConfirm={(id) => { setSentPings(prev => prev.filter(p => p.id !== id)); }} /> ))}
+         {sentPings.map(ping => ( 
+             <DidWeMeet 
+                key={ping.id} 
+                ping={ping} 
+                onConfirm={(idToDismiss) => { 
+                    setSentPings(current => current.filter(p => p.id !== idToDismiss)); 
+                }} 
+             /> 
+         ))}
       </div>
 
       {/* ACTIVE LOCATION CARD + USER GRID */}
