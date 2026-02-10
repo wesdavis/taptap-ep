@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
-import { User, ..., Footprints, X } from 'lucide-react';
+
 
 // Components
 import MysteryPopup from '@/components/gamification/MysteryPopup'; 
@@ -12,7 +12,7 @@ import PlacesList from '@/components/profile/PlacesList';
 import ConnectionsList from '@/components/profile/ConnectionsList'; 
 import UserGrid from '@/components/location/UserGrid'; 
 
-import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Loader2, Navigation, Settings as SettingsIcon, Footprints } from 'lucide-react';
+import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Loader2, Navigation, Settings as SettingsIcon, Footprints, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
