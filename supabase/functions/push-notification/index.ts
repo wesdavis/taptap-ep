@@ -11,35 +11,26 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 Deno.serve(async (req) => {
   try {
     const { record } = await req.json()
-    console.log("1. Received Ping Record:", record.id) // 🟢 LOG 1
 
-    // Get Sender
-    const { data: sender, error: senderError } = await supabase
+    // 1. Get Sender Name
+    const { data: sender } = await supabase
       .from('profiles')
       .select('display_name')
       .eq('id', record.from_user_id)
       .single()
-    
-    if (senderError) console.error("Sender Error:", senderError)
-    console.log("2. Sender Found:", sender?.display_name) // 🟢 LOG 2
 
-    // Get Receiver
-    const { data: receiver, error: receiverError } = await supabase
+    // 2. Get Receiver Device ID
+    const { data: receiver } = await supabase
       .from('profiles')
       .select('onesignal_id')
       .eq('id', record.to_user_id)
       .single()
 
-    if (receiverError) console.error("Receiver Error:", receiverError)
-    console.log("3. Receiver ID Found:", receiver?.onesignal_id) // 🟢 LOG 3
-
     if (!receiver?.onesignal_id) {
-      console.log("❌ ABORT: Receiver has no OneSignal ID")
       return new Response("User has no device registered", { status: 200 })
     }
 
-    // Send to OneSignal
-    console.log("4. Sending to OneSignal...") 
+    // 3. Send Clean Notification
     const response = await fetch("https://onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
@@ -50,8 +41,9 @@ Deno.serve(async (req) => {
         app_id: ONESIGNAL_APP_ID,
         include_player_ids: [receiver.onesignal_id],
         headings: { en: "Someone Tapped You!" },
-        // Random number forces it to be a "Unique" message every time
-        contents: { en: `${sender?.display_name || 'Someone'} is waiting... (${Math.floor(Math.random() * 1000)})` },
+        // 🟢 CLEAN: No random numbers here anymore
+        contents: { en: `${sender?.display_name || 'Someone'} is waiting for you...` },
+        // 🟢 HIDDEN MAGIC: This timestamp forces OneSignal to treat it as new
         data: { 
             ping_id: record.id,
             timestamp: Date.now() 
@@ -60,12 +52,9 @@ Deno.serve(async (req) => {
     })
 
     const result = await response.json()
-    console.log("5. OneSignal Result:", JSON.stringify(result)) // 🟢 LOG 5 (The most important one)
-
     return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } })
 
   } catch (error: any) {
-    console.error("❌ CRITICAL ERROR:", error.message)
     return new Response(JSON.stringify({ error: error.message }), { status: 500 })
   }
 })
