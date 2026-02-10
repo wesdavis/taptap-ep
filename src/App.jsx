@@ -29,33 +29,44 @@ const PageNotFound = () => (
 const AuthenticatedApp = () => {
   const { user, loading, profileMissing } = useAuth();
 
-  // 🟢 ONESIGNAL INIT LOGIC
   useEffect(() => {
     if (user) {
       // 1. Initialize OneSignal
-      // You must get this App ID from the OneSignal Dashboard
       OneSignal.init({
-        appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", // ⚠️ REPLACE THIS
-        allowLocalhostAsSecureOrigin: true, // For testing
-      }).then(() => {
-        // 2. Ask for Permission
+        appId: "YOUR-ONESIGNAL-APP-ID-HERE", // ⚠️ MAKE SURE THIS IS FILLED IN
+        allowLocalhostAsSecureOrigin: true,
+      }).then(async () => {
+        console.log("OneSignal Initialized");
+
+        // 2. Login the user (Links Supabase ID to OneSignal)
+        await OneSignal.login(user.id);
+
+        // 3. FORCE GET ID (Don't just wait for changes)
+        // This fixes the bug where "Already Subscribed" users never save their ID
+        const currentId = OneSignal.User.PushSubscription.id;
+        if (currentId) {
+            console.log("Found existing OneSignal ID:", currentId);
+            const { error } = await supabase
+                .from('profiles')
+                .update({ onesignal_id: currentId })
+                .eq('id', user.id);
+            if (error) console.error("Error saving ID:", error);
+        }
+
+        // 4. Prompt for Push (If not already granted)
         OneSignal.Slidedown.promptPush();
       });
 
-      // 3. Save the OneSignal ID to Supabase
-      // This runs when the user subscribes or we get their ID
+      // 5. Listen for future changes (e.g. they enable it later)
       OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
         if (event.current.id) {
-            console.log("OneSignal ID:", event.current.id);
+            console.log("New OneSignal ID detected:", event.current.id);
             await supabase
                 .from('profiles')
                 .update({ onesignal_id: event.current.id })
                 .eq('id', user.id);
         }
       });
-      
-      // Also try to login the user to OneSignal to track them
-      OneSignal.login(user.id);
     }
   }, [user]);
 
