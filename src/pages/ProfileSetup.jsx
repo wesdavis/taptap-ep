@@ -7,16 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw } from 'lucide-react';
+// 🟢 Consolidated Imports (Removed Duplicates)
+import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { Loader2, Camera, ChevronLeft, LogOut } from 'lucide-react'; // Add LogOut icon
 
 // 🟢 AI Safety Libraries
 import * as tf from '@tensorflow/tfjs';
 import * as nsfwjs from 'nsfwjs';
 
 export default function ProfileSetup() {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth(); // Changed logout to signOut to match context
   const navigate = useNavigate();
   
   // UI States
@@ -37,8 +37,8 @@ export default function ProfileSetup() {
     full_name: '',
     handle: '',
     gender: '',
-    birth_date: '', // 🟢 NEW
-    relationship_status: '', // 🟢 NEW
+    birth_date: '', 
+    relationship_status: '', 
     bio: '',
     avatar_url: '',
     photos: [],
@@ -72,8 +72,8 @@ export default function ProfileSetup() {
             full_name: data.display_name || data.full_name || '',
             handle: data.handle || '',
             gender: data.gender || '',
-            birth_date: data.birth_date || '', // 🟢 NEW: Load existing data
-            relationship_status: data.relationship_status || '', // 🟢 NEW
+            birth_date: data.birth_date || '', 
+            relationship_status: data.relationship_status || '', 
             bio: data.bio || '',
             avatar_url: data.avatar_url || '',
             photos: data.photos || [],
@@ -196,8 +196,8 @@ export default function ProfileSetup() {
             display_name: formData.full_name, 
             handle: cleanHandle,
             gender: formData.gender,
-            birth_date: formData.birth_date, // 🟢 NEW: Save to DB
-            relationship_status: formData.relationship_status, // 🟢 NEW: Save to DB
+            birth_date: formData.birth_date, 
+            relationship_status: formData.relationship_status, 
             bio: formData.bio,
             avatar_url: finalAvatar, 
             photos: formData.photos, 
@@ -215,9 +215,9 @@ export default function ProfileSetup() {
     }
   }
 
+  // 🟢 GHOSTBUSTER LOGOUT LOGIC
   const handleLogout = async () => {
     try {
-      // 🟢 GHOSTBUSTER LOGIC: Check out of location first
       if (user) {
           await supabase
             .from('checkins')
@@ -225,13 +225,11 @@ export default function ProfileSetup() {
             .eq('user_id', user.id);
       }
       
-      // Then Sign Out
-      await signOut();
+      await signOut(); // Changed from logout() to signOut()
       navigate('/landing');
       toast.success("Logged out successfully");
     } catch (error) {
       console.error("Logout error:", error);
-      // Force logout anyway if DB fails
       await signOut();
       navigate('/landing');
     }
@@ -291,6 +289,7 @@ export default function ProfileSetup() {
                 <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-slate-400"><ArrowLeft className="w-6 h-6" /></Button>
                 <h1 className="text-2xl font-bold">Edit Profile</h1>
             </div>
+            {/* 🟢 LOGOUT BUTTON */}
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:text-red-400 hover:bg-red-900/20">
                 <LogOut className="w-4 h-4" />
             </Button>
@@ -321,7 +320,6 @@ export default function ProfileSetup() {
                         </div>
                     ))}
                 </div>
-                {/* Safety Badge */}
                 <div className="flex items-center gap-2 justify-center pt-2 opacity-50">
                     <ShieldAlert className="w-3 h-3 text-green-500" />
                     <span className="text-[10px] text-slate-400">AI Safety Scan Active</span>
@@ -344,7 +342,7 @@ export default function ProfileSetup() {
                 </Select>
             </div>
 
-            {/* 🟢 NEW: DEMOGRAPHICS SECTION */}
+            {/* DEMOGRAPHICS SECTION */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>Birthday</Label>
@@ -373,7 +371,7 @@ export default function ProfileSetup() {
             <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">{saving ? <Loader2 className="animate-spin" /> : "Save Changes"}</Button>
         </form>
         
-        {/* ONLY SHOW TO ADMINS */}
+        {/* ADMIN ZONE */}
         {formData.is_admin && (
             <div className="mt-12 pt-8 border-t border-slate-800/50 space-y-6">
                 <div className="flex items-center justify-center gap-2 mb-4">
@@ -381,7 +379,6 @@ export default function ProfileSetup() {
                     <h3 className="text-[10px] font-bold text-red-500 uppercase tracking-widest text-center">Super Admin Zone</h3>
                 </div>
                 
-                {/* PROMOTION SELECTOR */}
                 <div className="bg-amber-950/20 border border-amber-900/50 rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2 mb-1">
                         <Crown className="w-4 h-4 text-amber-500" />
@@ -404,7 +401,6 @@ export default function ProfileSetup() {
                     </div>
                 </div>
 
-                {/* DANGER ZONE TOOLS */}
                 <div className="grid grid-cols-2 gap-3">
                     <Button variant="outline" onClick={runGlobalCheckout} disabled={enriching} className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-16 flex flex-col gap-1 text-xs">
                         <LogOut className="w-4 h-4" />
@@ -416,7 +412,6 @@ export default function ProfileSetup() {
                     </Button>
                 </div>
 
-                {/* OLD TOOLS */}
                 <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3 opacity-50 hover:opacity-100 transition">
                     <Button variant="outline" onClick={runEnrichment} disabled={enriching} className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 h-8 text-xs">
                         1. Update Coordinates
