@@ -12,35 +12,45 @@ export default function PeopleMetList() {
     const fetchPeople = async () => {
         if (!user) return;
         
-        // 🟢 Fetch pings where I was sender OR receiver, AND it is confirmed
+        // 🟢 Fetch larger batch (50) to allow for deduplication
         const { data } = await supabase
             .from('pings')
             .select(`
                 id, 
                 created_at,
+                updated_at,
                 sender:profiles!from_user_id(id, display_name, avatar_url, handle),
                 receiver:profiles!to_user_id(id, display_name, avatar_url, handle)
             `)
             .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`)
-            .eq('met_confirmed', true) // Only confirmed meetings
+            .eq('met_confirmed', true)
             .order('updated_at', { ascending: false })
-            .limit(10);
+            .limit(50); // Grab 50 so we can filter down to 10 unique ones
 
         if (data) {
-            // Process to find "The Other Person"
-            const formatted = data.map(ping => {
+            // 🟢 DEDUPLICATION LOGIC
+            const uniqueMap = new Map();
+
+            data.forEach(ping => {
                 const isMeSender = ping.sender.id === user.id;
-                return {
-                    id: ping.id,
-                    metAt: ping.created_at,
-                    user: isMeSender ? ping.receiver : ping.sender
-                };
+                const otherUser = isMeSender ? ping.receiver : ping.sender;
+
+                // If we haven't added this user yet, add them now
+                if (!uniqueMap.has(otherUser.id)) {
+                    uniqueMap.set(otherUser.id, {
+                        id: ping.id,
+                        metAt: ping.updated_at || ping.created_at, // Prefer updated_at
+                        user: otherUser
+                    });
+                }
             });
-            setPeople(formatted);
+
+            // Convert Map to Array and take only the top 10
+            const uniqueList = Array.from(uniqueMap.values()).slice(0, 10);
+            setPeople(uniqueList);
         }
     };
 
-    // 🟢 Realtime Listener for instant updates
     useEffect(() => {
         fetchPeople();
 
@@ -50,9 +60,9 @@ export default function PeopleMetList() {
                 event: 'UPDATE', 
                 schema: 'public', 
                 table: 'pings', 
-                filter: `met_confirmed=eq.true` // Listen for confirmations
+                filter: `met_confirmed=eq.true`
             }, () => {
-                fetchPeople(); // Refresh list
+                fetchPeople(); 
             })
             .subscribe();
 
