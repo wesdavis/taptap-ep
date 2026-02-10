@@ -9,7 +9,7 @@ import DidWeMeet from '@/components/notifications/DidWeMeet';
 import PeopleMetList from '@/components/notifications/PeopleMetList'; 
 import PlacesList from '@/components/profile/PlacesList'; 
 import ConnectionsList from '@/components/profile/ConnectionsList'; 
-import UserGrid from '@/components/location/UserGrid'; // 🟢 NEW: Direct Grid Integration
+import UserGrid from '@/components/location/UserGrid'; 
 
 import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Loader2, Navigation, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,7 +47,7 @@ const Home = () => {
   const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 });
   const [expandedSection, setExpandedSection] = useState(null); 
   
-  // 🟢 NEW: Loading state for Quick Check-In
+  // Quick Check-In Loading State
   const [checkingInId, setCheckingInId] = useState(null);
 
   useEffect(() => {
@@ -114,13 +114,10 @@ const Home = () => {
     } catch (error) { console.error(error); }
   };
 
-  // 🟢 NEW: QUICK CHECK-IN LOGIC
   const handleQuickCheckIn = async (e, loc) => {
-      e.stopPropagation(); // Stop clicking the card (navigating)
-      
+      e.stopPropagation(); 
       if (!userCoords) { toast.error("Waiting for GPS..."); return; }
 
-      // 1. Verify Distance
       const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
       if (dist > 0.5) { 
           toast.error(`Too far! You are ${dist.toFixed(1)} miles away.`); 
@@ -129,10 +126,8 @@ const Home = () => {
 
       setCheckingInId(loc.id);
       try {
-          // 2. Checkout of old place (if any)
           await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
           
-          // 3. Check into new place
           const { data, error } = await supabase.from('checkins').insert({
               user_id: user.id,
               location_id: loc.id,
@@ -143,8 +138,6 @@ const Home = () => {
           
           setCurrentCheckIn(data);
           toast.success(`Checked into ${loc.name}!`);
-          
-          // Optimistic Update for counts
           setActiveUsersAtLocation(prev => ({ ...prev, [loc.id]: (prev[loc.id] || 0) + 1 }));
 
       } catch(e) { 
@@ -193,7 +186,7 @@ const Home = () => {
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
       
-      {/* MYSTERY POPUP (Receiver) */}
+      {/* 🟢 FIXED: STRICT FILTER FOR PENDING PINGS */}
       <MysteryPopup 
         pings={receivedPings.filter(p => p.status === 'pending')} 
         onDismiss={(id) => { setReceivedPings(prev => prev.filter(p => p.id !== id)); }} 
@@ -214,7 +207,6 @@ const Home = () => {
                 <button onClick={(e) => { e.stopPropagation(); navigate('/profile-setup'); }} className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full flex items-center gap-2 hover:bg-white/20 transition active:scale-95 shadow-lg"><Edit3 className="w-4 h-4 text-white" /><span className="text-sm font-bold text-white">Edit Profile</span></button>
             </div>
         </div>
-        {/* 🟢 NEW: Settings Button */}
         <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
       </div>
 
@@ -223,7 +215,7 @@ const Home = () => {
          {sentPings.map(ping => ( <DidWeMeet key={ping.id} ping={ping} onConfirm={(id) => { setSentPings(prev => prev.filter(p => p.id !== id)); }} /> ))}
       </div>
 
-      {/* 🟢 ACTIVE LOCATION CARD + USER GRID */}
+      {/* ACTIVE LOCATION CARD + USER GRID */}
       {currentCheckIn && (
         <div className="px-4 mb-8 mt-6">
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-amber-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95">
@@ -237,7 +229,6 @@ const Home = () => {
                     <button onClick={handleCheckOut} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition"><LogOut className="w-5 h-5" /></button>
                 </div>
 
-                {/* 🟢 THE BREAD & BUTTER: LIVE USER GRID */}
                 <div className="mt-4">
                     <UserGrid locationId={currentCheckIn.location_id} />
                 </div>
@@ -255,8 +246,6 @@ const Home = () => {
       </div>
       
       <div className="px-4 space-y-3">
-        
-        {/* PROMOTED SLOT */}
         {promotedLocation && (
             <div key={promotedLocation.id} onClick={() => navigate(`/location/${promotedLocation.id}`)} className="bg-amber-950/20 border-2 border-amber-500/50 p-3 rounded-xl active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden">
                 <div className="absolute -right-10 -top-10 w-32 h-32 bg-amber-500/20 blur-3xl rounded-full pointer-events-none"></div>
@@ -275,7 +264,6 @@ const Home = () => {
                     <ChevronRight className="w-4 h-4 text-amber-500 ml-2" />
                 </div>
                 
-                {/* 🟢 QUICK CHECK-IN BUTTON (Promoted) */}
                 <button 
                     onClick={(e) => handleQuickCheckIn(e, promotedLocation)}
                     disabled={checkingInId === promotedLocation.id} 
@@ -287,7 +275,6 @@ const Home = () => {
             </div>
         )}
 
-        {/* STANDARD LIST */}
         {otherLocations.map((loc) => {
             const imageUrl = (loc.google_photos && loc.google_photos.length > 0) ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400` : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");
             const count = activeUsersAtLocation[loc.id] || 0;
@@ -307,7 +294,6 @@ const Home = () => {
                     <div className="relative w-16 h-16 shrink-0"><img src={imageUrl} alt={loc.name} className="w-full h-full object-cover rounded-lg border border-slate-700" loading="lazy" /></div>
                 </div>
                 
-                {/* 🟢 QUICK CHECK-IN BUTTON (Standard) */}
                 <button 
                     onClick={(e) => handleQuickCheckIn(e, loc)}
                     disabled={checkingInId === loc.id} 
@@ -331,6 +317,7 @@ const Home = () => {
           </div>
           {expandedSection && (<div className="border-t border-slate-800 p-4 bg-slate-950/30 animate-in slide-in-from-top-2 fade-in duration-300">{expandedSection === 'people' && <ConnectionsList />}{expandedSection === 'places' && <PlacesList />}</div>)}
       </div>
+
     </div>
   );
 };
