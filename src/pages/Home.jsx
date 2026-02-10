@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
+import { User, ..., Footprints, X } from 'lucide-react';
 
 // Components
 import MysteryPopup from '@/components/gamification/MysteryPopup'; 
@@ -187,31 +188,45 @@ const Home = () => {
           />
       )}
 
-      {/* 🟢 FIX #23: THE GOLD MISSION BAR */}
+      {/* 🟢 FIX #23: THE GOLD MISSION BAR (Now with Close Button) */}
       {activeMission && (
-        <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 p-0.5 animate-in slide-in-from-top duration-500 sticky top-0 z-50 shadow-xl shadow-amber-500/20">
-            <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                        </span>
-                        <img src={activeMission.sender?.avatar_url} className="w-10 h-10 rounded-full border-2 border-amber-500" alt="Mission" />
-                    </div>
-                    <div>
-                        <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest">Current Mission</p>
-                        <p className="text-white font-bold text-sm leading-none">Find {activeMission.sender?.display_name}</p>
-                    </div>
-                </div>
-                <button 
-                    onClick={() => navigate(`/user/${activeMission.sender?.id}`)}
-                    className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1 transition shadow-lg"
-                >
-                    <Footprints className="w-3 h-3 fill-black" /> GO
-                </button>
-            </div>
-        </div>
+      <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 p-0.5 animate-in slide-in-from-top duration-500 sticky top-0 z-50 shadow-xl shadow-amber-500/20">
+          <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                  <div className="relative">
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                      </span>
+                      <img src={activeMission.sender?.avatar_url} className="w-10 h-10 rounded-full border-2 border-amber-500" alt="Mission" />
+                  </div>
+                  <div>
+                      <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest">Current Mission</p>
+                      <p className="text-white font-bold text-sm leading-none">Find {activeMission.sender?.display_name}</p>
+                  </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                  <button 
+                      onClick={() => navigate(`/user/${activeMission.sender?.id}`)}
+                      className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1 transition shadow-lg active:scale-95"
+                  >
+                      <Footprints className="w-3 h-3 fill-black" /> GO
+                  </button>
+                  
+                  {/* 🔴 THE CLOSE BUTTON */}
+                  <button 
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMission(null); // Instantly kills the bar
+                      }}
+                      className="h-8 w-8 flex items-center justify-center bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition"
+                  >
+                      <X className="w-4 h-4" />
+                  </button>
+              </div>
+          </div>
+      </div>
       )}
 
       {/* HEADER */}

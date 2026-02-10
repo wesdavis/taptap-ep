@@ -1,76 +1,84 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useNavigate } from 'react-router-dom';
+import { MessageCircle, User } from 'lucide-react';
 
 export default function ConnectionsList() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [people, setPeople] = useState([]);
-  const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+    const [connections, setConnections] = useState([]);
+    const navigate = useNavigate();
 
-  useEffect(() => {
-    async function fetchConnections() {
-        if (!user) return;
-        
+    useEffect(() => {
+        if (user) fetchConnections();
+    }, [user]);
+
+    const fetchConnections = async () => {
+        // 🟢 SAME LOGIC AS PEOPLE MET ICONS
         const { data } = await supabase
             .from('pings')
             .select(`
+                id, 
                 created_at,
-                sender:profiles!from_user_id(id, display_name, avatar_url, handle),
-                receiver:profiles!to_user_id(id, display_name, avatar_url, handle)
+                sender:profiles!from_user_id(id, display_name, avatar_url, handle, bio),
+                receiver:profiles!to_user_id(id, display_name, avatar_url, handle, bio)
             `)
             .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`)
-            .eq('status', 'accepted')
-            .order('created_at', { ascending: false });
+            .eq('met_confirmed', true) 
+            .order('updated_at', { ascending: false });
 
         if (data) {
-            const connections = data.map(ping => {
-                const other = ping.sender.id === user.id ? ping.receiver : ping.sender;
-                return { ...other, met_at: ping.created_at };
+            const formatted = data.map(ping => {
+                const isMeSender = ping.sender.id === user.id;
+                return {
+                    id: ping.id,
+                    metAt: ping.created_at,
+                    user: isMeSender ? ping.receiver : ping.sender
+                };
             });
-
-            const unique = [];
-            const seen = new Set();
-            connections.forEach(p => {
-                if (!seen.has(p.id)) {
-                    seen.add(p.id);
-                    unique.push(p);
-                }
-            });
-            setPeople(unique);
+            setConnections(formatted);
         }
-        setLoading(false);
+    };
+
+    if (connections.length === 0) {
+        return (
+            <div className="text-center py-8 text-slate-500">
+                <User className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">Your circle is empty.</p>
+                <p className="text-xs">Go out and tap someone!</p>
+            </div>
+        );
     }
-    fetchConnections();
-  }, [user]);
 
-  if (loading) return <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-amber-500" /></div>;
-
-  return (
-    <div className="space-y-3 mt-4 animate-in slide-in-from-top-4 fade-in duration-300">
-        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest px-1">Your Circle</h3>
-        {people.map((person) => (
-            <div 
-                key={person.id} 
-                onClick={() => navigate(`/user/${person.id}`)}
-                className="bg-slate-900/50 border border-slate-800 p-3 rounded-xl flex items-center justify-between active:bg-slate-800 transition cursor-pointer"
-            >
-                <div className="flex items-center gap-4">
-                    <img src={person.avatar_url} className="w-10 h-10 rounded-full object-cover border border-slate-700" />
-                    <div>
-                        <h3 className="font-bold text-white text-sm">{person.display_name}</h3>
-                        <p className="text-xs text-amber-500">@{person.handle}</p>
+    return (
+        <div className="space-y-4">
+            {connections.map((item) => (
+                <div 
+                    key={item.id} 
+                    onClick={() => navigate(`/user/${item.user.id}`)}
+                    className="flex items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded-xl hover:bg-slate-800 transition cursor-pointer group"
+                >
+                    <div className="flex items-center gap-3">
+                        <Avatar className="w-12 h-12 border-2 border-slate-700 group-hover:border-amber-500 transition">
+                            <AvatarImage src={item.user.avatar_url} />
+                            <AvatarFallback>{item.user.display_name?.[0]}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <h4 className="font-bold text-white text-sm">{item.user.display_name}</h4>
+                            <p className="text-amber-500 text-xs">@{item.user.handle}</p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <span className="text-[10px] text-slate-500 block">
+                            {new Date(item.metAt).toLocaleDateString()}
+                        </span>
+                        <div className="bg-slate-800 p-2 rounded-full text-slate-400 group-hover:bg-amber-500 group-hover:text-black transition inline-flex mt-1">
+                            <MessageCircle className="w-4 h-4" />
+                        </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span>{new Date(person.met_at).toLocaleDateString()}</span>
-                    <ChevronRight className="w-4 h-4" />
-                </div>
-            </div>
-        ))}
-        {people.length === 0 && <p className="text-center text-slate-500 py-4 text-sm">No connections yet.</p>}
-    </div>
-  );
+            ))}
+        </div>
+    );
 }
