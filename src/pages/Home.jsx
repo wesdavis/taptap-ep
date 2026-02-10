@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 
-
 // Components
 import MysteryPopup from '@/components/gamification/MysteryPopup'; 
 import DidWeMeet from '@/components/notifications/DidWeMeet';     
-import PeopleMetList from '@/components/notifications/PeopleMetList'; 
+// REMOVED: PeopleMetList (Redundant)
 import PlacesList from '@/components/profile/PlacesList'; 
 import ConnectionsList from '@/components/profile/ConnectionsList'; 
 import UserGrid from '@/components/location/UserGrid'; 
@@ -36,11 +35,10 @@ const Home = () => {
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
   
+  // State
   const [sentPings, setSentPings] = useState([]); 
   const [receivedPings, setReceivedPings] = useState([]); 
-  
-  // 🟢 NEW: Track active "Missions" (Revealed but not met)
-  const [activeMission, setActiveMission] = useState(null);    
+  const [activeMission, setActiveMission] = useState(null); 
   
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -64,6 +62,7 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
+    let channel;
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -71,35 +70,9 @@ const Home = () => {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
           setProfile(profileData);
 
-          // 1. Sent Pings (Waiting for confirmation)
-          const { data: sentData } = await supabase.from('pings')
-            .select(`*, receiver:profiles!to_user_id(*)`)
-            .eq('from_user_id', user.id)
-            .is('met_confirmed', null) 
-            .order('created_at', { ascending: false });
-          setSentPings(sentData || []);
-
-          // 2. Received Pings (Pending Reveal)
-          const { data: receivedData } = await supabase.from('pings')
-            .select(`*, sender:profiles!from_user_id(*)`)
-            .eq('to_user_id', user.id)
-            .eq('status', 'pending') 
-            .order('created_at', { ascending: false });
-          setReceivedPings(receivedData || []);
-
-          // 🟢 3. FIND ACTIVE MISSION (Revealed but not confirmed met)
-          const { data: missionData } = await supabase.from('pings')
-            .select(`*, sender:profiles!from_user_id(*)`)
-            .eq('to_user_id', user.id)
-            .eq('status', 'revealed')
-            .is('met_confirmed', null)
-            .order('updated_at', { ascending: false })
-            .limit(1);
+          // Initial Load
+          loadPings();
           
-          if (missionData && missionData.length > 0) {
-              setActiveMission(missionData[0]);
-          }
-
           const { data: myCheckIn } = await supabase.from('checkins').select(`*, locations (*)`).eq('user_id', user.id).eq('is_active', true).maybeSingle();
           setCurrentCheckIn(myCheckIn);
 
@@ -111,6 +84,18 @@ const Home = () => {
           const { count: visitedCount } = await supabase.from('checkins').select('location_id', { count: 'exact', head: true }).eq('user_id', user.id); 
           const { count: metCount } = await supabase.from('pings').select('id', { count: 'exact', head: true }).or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`).eq('met_confirmed', true); 
           setStats({ peopleMet: metCount || 0, placesVisited: visitedCount || 0 });
+
+          // Realtime Listener
+          channel = supabase.channel('home-realtime')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'pings', 
+                filter: `or(to_user_id.eq.${user.id},from_user_id.eq.${user.id})`
+            }, (payload) => {
+                loadPings();
+            })
+            .subscribe();
         }
 
         const { data: locData } = await supabase.from('locations').select('*');
@@ -118,7 +103,33 @@ const Home = () => {
       } catch (err) { console.error('Error:', err); } finally { setLoading(false); }
     };
     fetchData();
+    return () => { if (channel) supabase.removeChannel(channel); };
   }, [user]);
+
+  const loadPings = async () => {
+      // 1. Pending Pings (For Mystery Popup) - Receiver Only
+      const { data: receivedData } = await supabase.from('pings')
+        .select(`*, sender:profiles!from_user_id(*)`)
+        .eq('to_user_id', user.id)
+        .eq('status', 'pending') 
+        .order('created_at', { ascending: false });
+      setReceivedPings(receivedData || []);
+
+      // 2. Active Mission (Revealed but not confirmed) - Receiver Only (Female)
+      const { data: missionData } = await supabase.from('pings')
+        .select(`*, sender:profiles!from_user_id(*)`)
+        .eq('to_user_id', user.id)
+        .eq('status', 'revealed')
+        .is('met_confirmed', null) 
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      
+      if (missionData && missionData.length > 0) {
+          setActiveMission(missionData[0]);
+      } else {
+          setActiveMission(null);
+      }
+  };
 
   const handleCheckOut = async () => {
     const checkinId = currentCheckIn?.id;
@@ -126,6 +137,7 @@ const Home = () => {
     try {
         await supabase.from('checkins').update({ is_active: false }).eq('id', checkinId);
         setCurrentCheckIn(null);
+        setActiveMission(null); 
         toast.success("Checked out successfully.");
     } catch (error) { console.error(error); }
   };
@@ -181,52 +193,45 @@ const Home = () => {
             pings={receivedPings} 
             onDismiss={(idToDismiss) => { 
                 setReceivedPings(current => current.filter(p => p.id !== idToDismiss));
-                // 🟢 When dismissed, trigger a refresh to find it as a "Mission"? 
-                // Actually, next load will catch it, or we can assume it becomes active.
-                window.location.reload(); // Quick hack to refresh active mission state
+                loadPings(); 
             }} 
           />
       )}
 
-      {/* 🟢 FIX #23: THE GOLD MISSION BAR (Now with Close Button) */}
-      {activeMission && (
-      <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 p-0.5 animate-in slide-in-from-top duration-500 sticky top-0 z-50 shadow-xl shadow-amber-500/20">
-          <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                  <div className="relative">
-                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                      </span>
-                      <img src={activeMission.sender?.avatar_url} className="w-10 h-10 rounded-full border-2 border-amber-500" alt="Mission" />
-                  </div>
-                  <div>
-                      <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest">Current Mission</p>
-                      <p className="text-white font-bold text-sm leading-none">Find {activeMission.sender?.display_name}</p>
-                  </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                  <button 
-                      onClick={() => navigate(`/user/${activeMission.sender?.id}`)}
-                      className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1 transition shadow-lg active:scale-95"
-                  >
-                      <Footprints className="w-3 h-3 fill-black" /> GO
-                  </button>
-                  
-                  {/* 🔴 THE CLOSE BUTTON */}
-                  <button 
-                      onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMission(null); // Instantly kills the bar
-                      }}
-                      className="h-8 w-8 flex items-center justify-center bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition"
-                  >
-                      <X className="w-4 h-4" />
-                  </button>
-              </div>
-          </div>
-      </div>
+      {/* 🟢 MISSION BAR (Gold, Only for Females, With Close Button) */}
+      {activeMission && currentCheckIn && (
+        <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 p-0.5 animate-in slide-in-from-top duration-500 sticky top-0 z-50 shadow-xl shadow-amber-500/20">
+            <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                        </span>
+                        <img src={activeMission.sender?.avatar_url} className="w-10 h-10 rounded-full border-2 border-amber-500" alt="Mission" />
+                    </div>
+                    <div>
+                        <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest">Current Mission</p>
+                        <p className="text-white font-bold text-sm leading-none">Find {activeMission.sender?.display_name}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => navigate(`/user/${activeMission.sender?.id}`)}
+                        className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1 transition shadow-lg active:scale-95"
+                    >
+                        <Footprints className="w-3 h-3 fill-black" /> GO
+                    </button>
+                    {/* CLOSE BUTTON */}
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setActiveMission(null); }}
+                        className="h-8 w-8 flex items-center justify-center bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
 
       {/* HEADER */}
@@ -247,18 +252,17 @@ const Home = () => {
         <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
       </div>
 
-      {/* DID WE MEET */}
-      <div className="space-y-4 px-4 -mt-4 relative z-20">
-         {sentPings.map(ping => ( 
+      {/* DID WE MEET CARD - Shows below header if mission is active */}
+      {activeMission && (
+          <div className="space-y-4 px-4 -mt-4 relative z-20">
              <DidWeMeet 
-                key={ping.id} 
-                ping={ping} 
+                ping={activeMission} 
                 onConfirm={(idToDismiss) => { 
-                    setSentPings(current => current.filter(p => p.id !== idToDismiss)); 
+                    setActiveMission(null); 
                 }} 
              /> 
-         ))}
-      </div>
+          </div>
+      )}
 
       {/* ACTIVE LOCATION */}
       {currentCheckIn && (
@@ -338,12 +342,7 @@ const Home = () => {
 
       <div className="px-4 py-6"><div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div></div>
       
-      {/* 🟢 FIX #22: RECENT CONNECTIONS LIST */}
-      <div className="px-4 space-y-4">
-          <h2 className="text-lg font-bold flex items-center gap-2"><Users className="w-5 h-5 text-amber-500" /> Recent Connections</h2>
-          <PeopleMetList />
-      </div>
-      
+      {/* 🟢 CLEANER STATS BOX (No redundant 'Recent Connections' list above it anymore) */}
       <div className="mt-8 mx-4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300">
           <div className="grid grid-cols-2 p-4 text-center">
               <div onClick={() => setExpandedSection(expandedSection === 'people' ? null : 'people')} className={`space-y-1 cursor-pointer rounded-xl transition py-2 ${expandedSection === 'people' ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}><div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div><div className="text-2xl font-black text-white">{stats.peopleMet}</div><div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div></div>

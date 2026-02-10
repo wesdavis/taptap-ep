@@ -15,12 +15,13 @@ export default function ConnectionsList() {
     }, [user]);
 
     const fetchConnections = async () => {
-        // 🟢 SAME LOGIC AS PEOPLE MET ICONS
+        // 🟢 Fetch ALL confirmed pings where I am sender OR receiver
         const { data } = await supabase
             .from('pings')
             .select(`
                 id, 
                 created_at,
+                updated_at,
                 sender:profiles!from_user_id(id, display_name, avatar_url, handle, bio),
                 receiver:profiles!to_user_id(id, display_name, avatar_url, handle, bio)
             `)
@@ -29,15 +30,24 @@ export default function ConnectionsList() {
             .order('updated_at', { ascending: false });
 
         if (data) {
-            const formatted = data.map(ping => {
+            // 🟢 DEDUPLICATION LOGIC
+            const uniqueMap = new Map();
+
+            data.forEach(ping => {
                 const isMeSender = ping.sender.id === user.id;
-                return {
-                    id: ping.id,
-                    metAt: ping.created_at,
-                    user: isMeSender ? ping.receiver : ping.sender
-                };
+                const otherUser = isMeSender ? ping.receiver : ping.sender;
+
+                // Only add if we haven't seen this user ID yet
+                if (!uniqueMap.has(otherUser.id)) {
+                    uniqueMap.set(otherUser.id, {
+                        id: ping.id,
+                        metAt: ping.updated_at || ping.created_at,
+                        user: otherUser
+                    });
+                }
             });
-            setConnections(formatted);
+
+            setConnections(Array.from(uniqueMap.values()));
         }
     };
 
@@ -52,12 +62,12 @@ export default function ConnectionsList() {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {connections.map((item) => (
                 <div 
                     key={item.id} 
                     onClick={() => navigate(`/user/${item.user.id}`)}
-                    className="flex items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded-xl hover:bg-slate-800 transition cursor-pointer group"
+                    className="flex items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded-xl hover:bg-slate-800 transition cursor-pointer group active:scale-95"
                 >
                     <div className="flex items-center gap-3">
                         <Avatar className="w-12 h-12 border-2 border-slate-700 group-hover:border-amber-500 transition">
