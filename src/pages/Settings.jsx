@@ -3,7 +3,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase'; 
 import { Button } from "@/components/ui/button";
-import { LogOut, ChevronLeft, User, Shield, Bell } from 'lucide-react';
+import { LogOut, ChevronLeft, User, Shield, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -13,7 +13,6 @@ export default function Settings() {
   const handleLogout = async () => {
     try {
       // 🟢 1. CLEANUP: checkout of any active location
-      // This prevents "ghosts" (users who are logged out but still appear at the bar)
       if (user) {
           const { error } = await supabase
             .from('checkins')
@@ -25,22 +24,36 @@ export default function Settings() {
 
       // 2. Sign Out
       await signOut();
-      
-      // 3. Redirect and Notify
       navigate('/landing');
       toast.success("Logged out successfully");
       
     } catch (error) {
       console.error("Logout error:", error);
-      // Force logout even if database update fails (safety net)
       await signOut(); 
       navigate('/landing');
     }
   };
 
+  const handleDeleteAccount = async () => {
+      if (!window.confirm("Are you sure? This cannot be undone.")) return;
+      
+      try {
+          // 1. Delete user data (Profile, etc cascades usually)
+          const { error } = await supabase.from('profiles').delete().eq('id', user.id);
+          if (error) throw error;
+          
+          // 2. Sign out
+          await signOut();
+          navigate('/landing');
+          toast.success("Account deleted.");
+      } catch (error) {
+          console.error(error);
+          toast.error("Could not delete account. Contact support.");
+      }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6 pb-24">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <Button 
             variant="ghost" 
@@ -102,19 +115,26 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Danger Zone (Logout) */}
-        <div className="bg-red-500/5 rounded-2xl p-5 border border-red-500/20">
-          <h2 className="font-bold text-xs uppercase tracking-wider text-red-500 mb-4">Actions</h2>
+        {/* Danger Zone */}
+        <div className="bg-red-500/5 rounded-2xl p-5 border border-red-500/20 space-y-3">
+          <h2 className="font-bold text-xs uppercase tracking-wider text-red-500 mb-2">Danger Zone</h2>
+          
           <Button 
             onClick={handleLogout} 
-            variant="destructive" 
-            className="w-full justify-center gap-2 font-bold bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20"
+            variant="outline" 
+            className="w-full justify-start gap-2 font-bold border-red-900/30 text-red-400 hover:bg-red-900/20 hover:text-red-300"
           >
             <LogOut className="w-4 h-4" /> Sign Out
           </Button>
-          <p className="text-[10px] text-center text-slate-500 mt-3">
-            Signing out will automatically check you out of any active location.
-          </p>
+
+          {/* 🟢 RESTORED: Delete Button */}
+          <Button 
+            onClick={handleDeleteAccount} 
+            variant="ghost" 
+            className="w-full justify-start gap-2 text-xs text-red-500/50 hover:text-red-500 hover:bg-red-900/10"
+          >
+            <Trash2 className="w-3 h-3" /> Delete Account
+          </Button>
         </div>
 
       </div>

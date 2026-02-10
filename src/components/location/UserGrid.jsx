@@ -179,7 +179,7 @@ export default function UserGrid({ locationId }) {
                     </div>
                     <h3 className="text-white font-bold text-lg">Who's Here?</h3>
                     <p className="text-slate-400 text-sm mb-4 max-w-[200px]">
-                        You must be checked in to see the crowd. No lurking allowed!
+                        You must be checked in to see the crowd.
                     </p>
                     {/* We don't show a check-in button here because Home.jsx handles that, 
                         but this confirms the state is locked. */}

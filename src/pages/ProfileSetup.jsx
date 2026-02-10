@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { Loader2, Camera, ChevronLeft, LogOut } from 'lucide-react'; // Add LogOut icon
 
 // 🟢 AI Safety Libraries
 import * as tf from '@tensorflow/tfjs';
@@ -214,7 +215,27 @@ export default function ProfileSetup() {
     }
   }
 
-  const handleLogout = async () => { await logout(); navigate('/auth'); };
+  const handleLogout = async () => {
+    try {
+      // 🟢 GHOSTBUSTER LOGIC: Check out of location first
+      if (user) {
+          await supabase
+            .from('checkins')
+            .update({ is_active: false })
+            .eq('user_id', user.id);
+      }
+      
+      // Then Sign Out
+      await signOut();
+      navigate('/landing');
+      toast.success("Logged out successfully");
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Force logout anyway if DB fails
+      await signOut();
+      navigate('/landing');
+    }
+  };
 
   // --- ADMIN TOOLS ---
   const handleSetPromotion = async () => {
@@ -270,7 +291,9 @@ export default function ProfileSetup() {
                 <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-slate-400"><ArrowLeft className="w-6 h-6" /></Button>
                 <h1 className="text-2xl font-bold">Edit Profile</h1>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-500/10"><LogOut className="w-4 h-4 mr-2" /> Log Out</Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:text-red-400 hover:bg-red-900/20">
+                <LogOut className="w-4 h-4" />
+            </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
