@@ -5,7 +5,7 @@ import { ThumbsUp, ThumbsDown, User, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function DidWeMeet({ ping, onConfirm }) {
-    const [status, setStatus] = useState(null); // 'confirming' | 'denying'
+    const [status, setStatus] = useState(null); 
     const [loading, setLoading] = useState(false);
 
     const handleConfirm = async (confirmed) => {
@@ -13,8 +13,10 @@ export default function DidWeMeet({ ping, onConfirm }) {
         setStatus(confirmed ? 'confirming' : 'denying');
 
         try {
-            // 1. Update the database
-            const { error } = await supabase
+            console.log(`Updating Ping ${ping.id} to ${confirmed}`);
+
+            // 1. UPDATE STATUS (This is the critical part)
+            const { error: updateError } = await supabase
                 .from('pings')
                 .update({ 
                     met_confirmed: confirmed,
@@ -22,23 +24,34 @@ export default function DidWeMeet({ ping, onConfirm }) {
                 })
                 .eq('id', ping.id);
 
-            if (error) throw error;
+            if (updateError) {
+                console.error("DB Error:", updateError);
+                throw new Error("Failed to save status");
+            }
 
+            // 2. GIVE XP (Optional - wrapped in its own try/catch so it doesn't crash the app)
             if (confirmed) {
-                // If confirmed, update XP
-                await supabase.rpc('increment_xp', { user_id: ping.from_user_id, amount: 10 });
-                toast.success("Connection confirmed! +10 XP");
+                try {
+                    const { error: xpError } = await supabase.rpc('increment_xp', { 
+                        user_id: ping.from_user_id, 
+                        amount: 10 
+                    });
+                    if (xpError) console.warn("XP Error (Ignored):", xpError);
+                    else toast.success("Connection confirmed! +10 XP");
+                } catch (e) {
+                    console.warn("XP System offline, but connection saved.");
+                }
             } else {
                 toast.info("No worries, maybe next time.");
             }
 
-            // 2. 🟢 Tell the Parent (Home.jsx) to remove this card
+            // 3. REMOVE CARD (This runs even if XP fails)
             setTimeout(() => {
                 onConfirm(ping.id);
             }, 500);
 
         } catch (err) {
-            console.error(err);
+            console.error("Critical Error:", err);
             toast.error("Error updating status");
             setLoading(false);
             setStatus(null);
