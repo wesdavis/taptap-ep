@@ -6,8 +6,6 @@ import { useAuth } from '@/lib/AuthContext';
 // Components
 import MysteryPopup from '@/components/gamification/MysteryPopup'; 
 import DidWeMeet from '@/components/notifications/DidWeMeet';     
-// REMOVED: PeopleMetList (Redundant)
-import PlacesList from '@/components/profile/PlacesList'; 
 import ConnectionsList from '@/components/profile/ConnectionsList'; 
 import UserGrid from '@/components/location/UserGrid'; 
 
@@ -36,9 +34,8 @@ const Home = () => {
   const [locations, setLocations] = useState([]);
   
   // State
-  const [sentPings, setSentPings] = useState([]); 
   const [receivedPings, setReceivedPings] = useState([]); 
-  const [activeMission, setActiveMission] = useState(null); 
+  const [activeMission, setActiveMission] = useState(null); // Revealed card for Receiver (Female)
   
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -118,7 +115,7 @@ const Home = () => {
       // 2. Active Mission (Revealed but not confirmed) - Receiver Only (Female)
       const { data: missionData } = await supabase.from('pings')
         .select(`*, sender:profiles!from_user_id(*)`)
-        .eq('to_user_id', user.id)
+        .eq('to_user_id', user.id) // 🟢 STRICT FILTER: Only if I am the Receiver
         .eq('status', 'revealed')
         .is('met_confirmed', null) 
         .order('updated_at', { ascending: false })
@@ -198,41 +195,8 @@ const Home = () => {
           />
       )}
 
-      {/* 🟢 MISSION BAR (Gold, Only for Females, With Close Button) */}
-      {activeMission && currentCheckIn && (
-        <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 p-0.5 animate-in slide-in-from-top duration-500 sticky top-0 z-50 shadow-xl shadow-amber-500/20">
-            <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                        </span>
-                        <img src={activeMission.sender?.avatar_url} className="w-10 h-10 rounded-full border-2 border-amber-500" alt="Mission" />
-                    </div>
-                    <div>
-                        <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest">Current Mission</p>
-                        <p className="text-white font-bold text-sm leading-none">Find {activeMission.sender?.display_name}</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => navigate(`/user/${activeMission.sender?.id}`)}
-                        className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1 transition shadow-lg active:scale-95"
-                    >
-                        <Footprints className="w-3 h-3 fill-black" /> GO
-                    </button>
-                    {/* CLOSE BUTTON */}
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); setActiveMission(null); }}
-                        className="h-8 w-8 flex items-center justify-center bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
+      {/* 🟢 GOLD MISSION BAR (Replaced by DidWeMeet, but keeping activeMission logic alive for it) */}
+      {/* (Removed redundant bar code since DidWeMeet handles the display below) */}
 
       {/* HEADER */}
       <div className="relative w-full h-[45vh] min-h-[400px] bg-slate-900 rounded-b-[3rem] overflow-hidden shadow-2xl mb-8 group">
@@ -252,7 +216,8 @@ const Home = () => {
         <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
       </div>
 
-      {/* DID WE MEET CARD - Shows below header if mission is active */}
+      {/* 🟢 DID WE MEET CARD (For Receiver/Female Only) */}
+      {/* Shows ONLY if there is an active mission (confirmed female receiver) */}
       {activeMission && (
           <div className="space-y-4 px-4 -mt-4 relative z-20">
              <DidWeMeet 
@@ -342,7 +307,7 @@ const Home = () => {
 
       <div className="px-4 py-6"><div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div></div>
       
-      {/* 🟢 CLEANER STATS BOX (No redundant 'Recent Connections' list above it anymore) */}
+      {/* 🟢 RECENT CONNECTIONS LIST (No horizontal list anymore, only vertical inside this box) */}
       <div className="mt-8 mx-4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300">
           <div className="grid grid-cols-2 p-4 text-center">
               <div onClick={() => setExpandedSection(expandedSection === 'people' ? null : 'people')} className={`space-y-1 cursor-pointer rounded-xl transition py-2 ${expandedSection === 'people' ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}><div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div><div className="text-2xl font-black text-white">{stats.peopleMet}</div><div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div></div>

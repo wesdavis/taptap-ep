@@ -1,12 +1,20 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
 import { ThumbsUp, ThumbsDown, User, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function DidWeMeet({ ping, onConfirm }) {
+    const { user } = useAuth();
     const [status, setStatus] = useState(null); 
     const [loading, setLoading] = useState(false);
+
+    // 🔴 SAFETY CHECK: If I am the Sender (Male), do not show this card.
+    if (user?.id === ping.from_user_id) return null;
+
+    // The person to show is ALWAYS the Sender (The Guy)
+    const otherUser = ping.sender;
 
     const handleConfirm = async (confirmed) => {
         setLoading(true);
@@ -15,7 +23,6 @@ export default function DidWeMeet({ ping, onConfirm }) {
         try {
             console.log(`Updating Ping ${ping.id} to ${confirmed}`);
 
-            // 1. UPDATE STATUS (This is the critical part)
             const { error: updateError } = await supabase
                 .from('pings')
                 .update({ 
@@ -24,44 +31,31 @@ export default function DidWeMeet({ ping, onConfirm }) {
                 })
                 .eq('id', ping.id);
 
-            if (updateError) {
-                console.error("DB Error:", updateError);
-                throw new Error("Failed to save status");
-            }
+            if (updateError) throw updateError;
 
-            // 2. GIVE XP (Optional - wrapped in its own try/catch so it doesn't crash the app)
             if (confirmed) {
                 try {
-                    const { error: xpError } = await supabase.rpc('increment_xp', { 
-                        user_id: ping.from_user_id, 
-                        amount: 10 
-                    });
-                    if (xpError) console.warn("XP Error (Ignored):", xpError);
-                    else toast.success("Connection confirmed! +10 XP");
-                } catch (e) {
-                    console.warn("XP System offline, but connection saved.");
-                }
+                    await supabase.rpc('increment_xp', { user_id: ping.from_user_id, amount: 10 });
+                    toast.success("Connection confirmed! +10 XP");
+                } catch (e) { console.log("XP Update skipped"); }
             } else {
-                toast.info("No worries, maybe next time.");
+                toast.info("No worries.");
             }
 
-            // 3. REMOVE CARD (This runs even if XP fails)
             setTimeout(() => {
                 onConfirm(ping.id);
             }, 500);
 
         } catch (err) {
-            console.error("Critical Error:", err);
+            console.error(err);
             toast.error("Error updating status");
             setLoading(false);
             setStatus(null);
         }
     };
 
-    if (!ping) return null;
-
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg animate-in slide-in-from-top-2">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg animate-in slide-in-from-top-2 relative z-30">
             <div className="flex items-center justify-between mb-3">
                 <h3 className="text-white font-bold flex items-center gap-2">
                     Did you meet?
@@ -73,18 +67,18 @@ export default function DidWeMeet({ ping, onConfirm }) {
             
             <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden shrink-0 border border-slate-700">
-                    {ping.receiver?.avatar_url ? (
-                        <img src={ping.receiver.avatar_url} className="w-full h-full object-cover" alt="Receiver" />
+                    {otherUser?.avatar_url ? (
+                        <img src={otherUser.avatar_url} className="w-full h-full object-cover" alt="Sender" />
                     ) : (
                         <div className="flex items-center justify-center w-full h-full"><User className="w-5 h-5 text-slate-500" /></div>
                     )}
                 </div>
                 <div>
                     <p className="text-sm text-slate-300">
-                        You tapped <span className="text-white font-bold">@{ping.receiver?.handle || 'User'}</span>
+                        You tapped <span className="text-white font-bold">@{otherUser?.handle || 'User'}</span>
                     </p>
                     <p className="text-xs text-slate-500 italic">
-                        {ping.locations?.name || "Unknown Location"}
+                        {ping.locations?.name || "at this location"}
                     </p>
                 </div>
             </div>
@@ -106,7 +100,7 @@ export default function DidWeMeet({ ping, onConfirm }) {
                     className="bg-green-600 hover:bg-green-500 text-white font-bold"
                 >
                     {status === 'confirming' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4 mr-2" />}
-                    Yes, we met!
+                    Yes
                 </Button>
             </div>
         </div>
