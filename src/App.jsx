@@ -1,9 +1,9 @@
-import { useEffect } from 'react'; // 🟢 Added useEffect
+import { useEffect, useRef } from 'react'; // 🟢 Added useRef
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/AuthContext';
-import { Toaster } from 'sonner';
-import OneSignal from 'react-onesignal'; // 🟢 Import OneSignal
+import { Toaster, toast } from 'sonner';
+import OneSignal from 'react-onesignal'; 
 
 // Components & Pages
 import GlobalNotificationLayer from './components/GlobalNotificationLayer'; 
@@ -16,9 +16,12 @@ import LocationDetails from './pages/LocationDetails';
 import Achievements from './pages/Achievements';
 import Settings from './pages/Settings';
 import BusinessDashboard from './pages/BusinessDashboard';
-import { supabase } from '@/lib/supabase'; // 🟢 Needed for saving the ID
+import { supabase } from '@/lib/supabase'; 
 
 const queryClient = new QueryClient();
+
+// 🟢 CONFIG: How long before auto-logout? (30 Minutes)
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; 
 
 const PageNotFound = () => (
   <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
@@ -27,22 +30,65 @@ const PageNotFound = () => (
 );
 
 const AuthenticatedApp = () => {
-  const { user, loading, profileMissing } = useAuth();
+  // 🟢 Added 'logout' to destructuring
+  const { user, loading, profileMissing, logout } = useAuth();
+  const timerRef = useRef(null);
 
+  // 🟢 1. GHOSTBUSTER IDLE TIMER
+  useEffect(() => {
+    if (!user) return;
+
+    const handleIdleLogout = async () => {
+      console.log("💤 User idle. Auto-logging out...");
+      
+      // A. Ghostbuster: Check out of location
+      try {
+        await supabase
+          .from('checkins')
+          .update({ is_active: false })
+          .eq('user_id', user.id);
+      } catch (err) { console.error("Error clearing checkin:", err); }
+
+      // B. Sign Out
+      if (logout) await logout();
+      toast("You were logged out due to inactivity.");
+    };
+
+    const resetTimer = () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(handleIdleLogout, IDLE_TIMEOUT_MS);
+    };
+
+    // Events to watch for activity
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    
+    // Attach listeners
+    events.forEach(event => document.addEventListener(event, resetTimer));
+    
+    // Start the timer immediately
+    resetTimer();
+
+    // Cleanup listeners on unmount
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      events.forEach(event => document.removeEventListener(event, resetTimer));
+    };
+  }, [user, logout]);
+
+
+  // 🟢 2. ONESIGNAL INIT LOGIC
   useEffect(() => {
     if (user) {
-      // 1. Initialize OneSignal
       OneSignal.init({
-        appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", // ⚠️ MAKE SURE THIS IS FILLED IN
+        appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", 
         allowLocalhostAsSecureOrigin: true,
       }).then(async () => {
         console.log("OneSignal Initialized");
 
-        // 2. Login the user (Links Supabase ID to OneSignal)
+        // Login the user
         await OneSignal.login(user.id);
 
-        // 3. FORCE GET ID (Don't just wait for changes)
-        // This fixes the bug where "Already Subscribed" users never save their ID
+        // Force Save ID
         const currentId = OneSignal.User.PushSubscription.id;
         if (currentId) {
             console.log("Found existing OneSignal ID:", currentId);
@@ -53,11 +99,10 @@ const AuthenticatedApp = () => {
             if (error) console.error("Error saving ID:", error);
         }
 
-        // 4. Prompt for Push (If not already granted)
         OneSignal.Slidedown.promptPush();
       });
 
-      // 5. Listen for future changes (e.g. they enable it later)
+      // Listen for future changes
       OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
         if (event.current.id) {
             console.log("New OneSignal ID detected:", event.current.id);
