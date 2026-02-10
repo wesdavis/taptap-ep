@@ -7,28 +7,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// 🟢 Consolidated Imports (Removed Duplicates)
+// 🟢 FIXED: Removed duplicate imports (ChevronLeft, Camera, LogOut were repeated)
 import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
-// 🟢 AI Safety Libraries
 import * as tf from '@tensorflow/tfjs';
 import * as nsfwjs from 'nsfwjs';
 
 export default function ProfileSetup() {
-  const { user, signOut } = useAuth(); // Changed logout to signOut to match context
+  // 🟢 FIX: Using 'logout' to match your AuthContext
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   
-  // UI States
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [scanning, setScanning] = useState(false); // AI Visual Feedback
+  const [scanning, setScanning] = useState(false); 
 
-  // AI Model State
   const [model, setModel] = useState(null);
-  
-  // Admin State
   const [enriching, setEnriching] = useState(false);
   const [venues, setVenues] = useState([]); 
   const [selectedPromoId, setSelectedPromoId] = useState("");
@@ -37,18 +33,16 @@ export default function ProfileSetup() {
     full_name: '',
     handle: '',
     gender: '',
-    birth_date: '', 
-    relationship_status: '', 
+    birth_date: '',
+    relationship_status: '',
     bio: '',
     avatar_url: '',
     photos: [],
     is_admin: false 
   });
 
-  // 1. Load Data & AI Model
   useEffect(() => {
     async function init() {
-        // Load AI
         try {
             const _model = await nsfwjs.load();
             setModel(_model);
@@ -56,8 +50,6 @@ export default function ProfileSetup() {
         } catch (err) {
             console.error("Failed to load safety model", err);
         }
-        
-        // Load User
         if (user) loadProfile();
     }
     init();
@@ -79,7 +71,6 @@ export default function ProfileSetup() {
             photos: data.photos || [],
             is_admin: data.is_admin || false 
         });
-        
         if (data.is_admin) {
             loadVenues();
         }
@@ -100,25 +91,19 @@ export default function ProfileSetup() {
       }
   }
 
-  // 2. THE AI SCANNER FUNCTION
   const checkSafety = async (file) => {
-      if (!model) return true; // Fail safe if model didn't load
-      
+      if (!model) return true; 
       return new Promise((resolve) => {
           const img = document.createElement('img');
           img.src = URL.createObjectURL(file);
           img.onload = async () => {
               const predictions = await model.classify(img);
-              
-              // Categories: Neutral, Drawing, Sexy, Porn, Hentai
               const porn = predictions.find(p => p.className === 'Porn');
               const hentai = predictions.find(p => p.className === 'Hentai');
-              
-              // Strict Threshold: If > 50% sure it's porn, block it.
               if ((porn && porn.probability > 0.5) || (hentai && hentai.probability > 0.5)) {
-                  resolve(false); // UNSAFE
+                  resolve(false); 
               } else {
-                  resolve(true); // SAFE
+                  resolve(true); 
               }
           };
       });
@@ -132,17 +117,14 @@ export default function ProfileSetup() {
     setUploading(true);
 
     try {
-        // A. Run Safety Check
         const isSafe = await checkSafety(file);
-        
         if (!isSafe) {
             toast.error("Photo rejected.", { description: "Our AI detected inappropriate content." });
             setScanning(false);
             setUploading(false);
-            return; // 🛑 STOP UPLOAD
+            return; 
         }
 
-        // B. Upload to Supabase
         const fileExt = file.name.split('.').pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
@@ -215,7 +197,7 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 GHOSTBUSTER LOGOUT LOGIC
+  // 🟢 FIXED LOGOUT LOGIC
   const handleLogout = async () => {
     try {
       if (user) {
@@ -225,17 +207,16 @@ export default function ProfileSetup() {
             .eq('user_id', user.id);
       }
       
-      await signOut(); // Changed from logout() to signOut()
+      if (logout) await logout(); // Use logout()
       navigate('/landing');
       toast.success("Logged out successfully");
     } catch (error) {
       console.error("Logout error:", error);
-      await signOut();
+      if (logout) await logout();
       navigate('/landing');
     }
   };
 
-  // --- ADMIN TOOLS ---
   const handleSetPromotion = async () => {
     if (!selectedPromoId) return;
     setEnriching(true);
@@ -289,7 +270,7 @@ export default function ProfileSetup() {
                 <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-slate-400"><ArrowLeft className="w-6 h-6" /></Button>
                 <h1 className="text-2xl font-bold">Edit Profile</h1>
             </div>
-            {/* 🟢 LOGOUT BUTTON */}
+            {/* LOGOUT BUTTON */}
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:text-red-400 hover:bg-red-900/20">
                 <LogOut className="w-4 h-4" />
             </Button>
