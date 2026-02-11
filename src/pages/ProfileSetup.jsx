@@ -7,15 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// 🟢 FIXED: Removed duplicate imports (ChevronLeft, Camera, LogOut were repeated)
-import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera, ChevronLeft } from 'lucide-react';
+// 🟢 FIXED IMPORTS (No duplicates)
+import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 
 import * as tf from '@tensorflow/tfjs';
 import * as nsfwjs from 'nsfwjs';
 
 export default function ProfileSetup() {
-  // 🟢 FIX: Using 'logout' to match your AuthContext
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
@@ -38,6 +37,7 @@ export default function ProfileSetup() {
     bio: '',
     avatar_url: '',
     photos: [],
+    interested_in: '', // Ensure this is tracked
     is_admin: false 
   });
 
@@ -69,6 +69,7 @@ export default function ProfileSetup() {
             bio: data.bio || '',
             avatar_url: data.avatar_url || '',
             photos: data.photos || [],
+            interested_in: data.interested_in || '',
             is_admin: data.is_admin || false 
         });
         if (data.is_admin) {
@@ -183,6 +184,7 @@ export default function ProfileSetup() {
             bio: formData.bio,
             avatar_url: finalAvatar, 
             photos: formData.photos, 
+            interested_in: formData.interested_in, // 🟢 Save Interest
             updated_at: new Date()
         });
 
@@ -197,7 +199,7 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 FIXED LOGOUT LOGIC
+  // 🟢 GHOSTBUSTER LOGOUT
   const handleLogout = async () => {
     try {
       if (user) {
@@ -207,7 +209,7 @@ export default function ProfileSetup() {
             .eq('user_id', user.id);
       }
       
-      if (logout) await logout(); // Use logout()
+      if (logout) await logout();
       navigate('/landing');
       toast.success("Logged out successfully");
     } catch (error) {
@@ -217,6 +219,7 @@ export default function ProfileSetup() {
     }
   };
 
+  // --- ADMIN TOOLS (FULLY RESTORED) ---
   const handleSetPromotion = async () => {
     if (!selectedPromoId) return;
     setEnriching(true);
@@ -270,7 +273,6 @@ export default function ProfileSetup() {
                 <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-slate-400"><ArrowLeft className="w-6 h-6" /></Button>
                 <h1 className="text-2xl font-bold">Edit Profile</h1>
             </div>
-            {/* LOGOUT BUTTON */}
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:text-red-400 hover:bg-red-900/20">
                 <LogOut className="w-4 h-4" />
             </Button>
@@ -311,19 +313,31 @@ export default function ProfileSetup() {
             <div className="space-y-2"><Label>Display Name</Label><Input required value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             <div className="space-y-2"><Label>Handle (@)</Label><Input required value={formData.handle} onChange={e => setFormData({...formData, handle: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             
-            <div className="space-y-2">
-                <Label>Gender</Label>
-                <Select value={formData.gender} onValueChange={val => setFormData({...formData, gender: val})}>
-                    <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                        <SelectItem value="Non-binary">Non-binary</SelectItem>
-                    </SelectContent>
-                </Select>
+            {/* 🟢 STRICT BINARY GENDERS & INTERESTS */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>I am a...</Label>
+                    <Select value={formData.gender} onValueChange={val => setFormData({...formData, gender: val})}>
+                        <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                            <SelectItem value="Male">Male</SelectItem>
+                            <SelectItem value="Female">Female</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Interested In...</Label>
+                    <Select value={formData.interested_in} onValueChange={val => setFormData({...formData, interested_in: val})}>
+                        <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                            <SelectItem value="Male">Men</SelectItem>
+                            <SelectItem value="Female">Women</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
-            {/* DEMOGRAPHICS SECTION */}
+            {/* DEMOGRAPHICS */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>Birthday</Label>
@@ -352,7 +366,7 @@ export default function ProfileSetup() {
             <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">{saving ? <Loader2 className="animate-spin" /> : "Save Changes"}</Button>
         </form>
         
-        {/* ADMIN ZONE */}
+        {/* ADMIN ZONE (FULLY RESTORED) */}
         {formData.is_admin && (
             <div className="mt-12 pt-8 border-t border-slate-800/50 space-y-6">
                 <div className="flex items-center justify-center gap-2 mb-4">
