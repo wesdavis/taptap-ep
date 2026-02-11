@@ -1,15 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase'; 
 import { Button } from "@/components/ui/button";
-import { LogOut, ChevronLeft, User, Shield, Trash2 } from 'lucide-react';
+import { LogOut, ChevronLeft, User, Shield, Trash2, Store, ChevronRight } from 'lucide-react'; // Added Store/ChevronRight
 import { toast } from 'sonner';
 
 export default function Settings() {
-  // 🟢 FIX: extracting 'logout' instead of 'signOut'
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+
+  // 🟢 NEW: State for Business Logic
+  const [isOwner, setIsOwner] = useState(false);
+
+  // 🟢 NEW: Check if user owns a venue
+  useEffect(() => {
+    async function checkOwnerStatus() {
+        if (!user) return;
+        
+        const { data } = await supabase
+            .from('locations')
+            .select('id')
+            .eq('owner_id', user.id)
+            .maybeSingle();
+            
+        if (data) setIsOwner(true);
+    }
+    checkOwnerStatus();
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -23,7 +41,7 @@ export default function Settings() {
           if (error) console.error("Error clearing check-in:", error);
       }
 
-      // 2. Sign Out (Using the correct name now)
+      // 2. Sign Out
       if (logout) await logout();
       
       navigate('/landing');
@@ -31,7 +49,6 @@ export default function Settings() {
       
     } catch (error) {
       console.error("Logout error:", error);
-      // Fallback
       if (logout) await logout(); 
       navigate('/landing');
     }
@@ -68,6 +85,27 @@ export default function Settings() {
       </div>
 
       <div className="space-y-6">
+
+        {/* 🟢 NEW: BUSINESS OWNER SECTION (Only shows if owner) */}
+        {isOwner && (
+            <div className="bg-gradient-to-r from-amber-950/40 to-slate-900 border border-amber-500/30 rounded-2xl p-2 shadow-xl animate-in slide-in-from-right-8 duration-500">
+                <div 
+                    onClick={() => navigate('/business')}
+                    className="flex items-center justify-between p-3 cursor-pointer hover:bg-white/5 rounded-xl transition-all group"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-amber-500/20 rounded-full group-hover:bg-amber-500/30 transition-colors">
+                            <Store className="w-6 h-6 text-amber-500" />
+                        </div>
+                        <div>
+                            <div className="font-bold text-white text-lg">Owner Dashboard</div>
+                            <div className="text-xs text-amber-500/80 uppercase tracking-wide font-bold">Manage Venue & Analytics</div>
+                        </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
+                </div>
+            </div>
+        )}
         
         {/* Account Section */}
         <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-xl">
@@ -95,7 +133,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* 🟢 YOUR NEW DANGER ZONE LAYOUT */}
+        {/* Danger Zone */}
         <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-xl space-y-3">
           <h2 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-2">Sign Out & Delete Account</h2>
           

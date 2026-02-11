@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
-    BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, 
-    AreaChart, Area, PieChart, Pie, Cell, Legend 
+  BarChart, Bar, XAxis, Tooltip as RechartsTooltip, ResponsiveContainer, 
+  AreaChart, Area, PieChart, Pie, Cell, Legend 
 } from 'recharts';
 import { Users, TrendingUp, Heart, Activity, Calendar } from 'lucide-react';
 
@@ -10,7 +10,15 @@ const COLORS = ['#f59e0b', '#3b82f6', '#ec4899', '#10b981']; // Amber, Blue, Pin
 
 export default function VenueAnalytics({ locationId }) {
     const [loading, setLoading] = useState(true);
-    const [summary, setSummary] = useState({ total: 0, activeNow: 0, today: 0 });
+    const [summary, setSummary] = useState({ 
+        total: 0, 
+        activeNow: 0, 
+        today: 0,
+        maleCount: 0,
+        femaleCount: 0,
+        malePct: 0,
+        femalePct: 0
+    });
     
     // Chart Data
     const [hourlyData, setHourlyData] = useState([]);
@@ -20,7 +28,7 @@ export default function VenueAnalytics({ locationId }) {
     const fetchStats = async () => {
         if (!locationId) return;
 
-        // 1. Get Checkins with Profile Data
+        // 1. Get Checkins with Profile Data (Only for THIS venue)
         const { data: checkins } = await supabase
             .from('checkins')
             .select(`
@@ -28,7 +36,7 @@ export default function VenueAnalytics({ locationId }) {
                 is_active, 
                 profiles ( birth_date, relationship_status, gender )
             `)
-            .eq('location_id', locationId);
+            .eq('location_id', locationId); // 🔒 STRICT FILTER
 
         if (checkins) {
             processData(checkins);
@@ -38,19 +46,17 @@ export default function VenueAnalytics({ locationId }) {
 
     // 🟢 REAL-TIME LISTENER
     useEffect(() => {
-        fetchStats(); // Initial Fetch
+        fetchStats(); 
 
-        // Subscribe to NEW Checkins or UPDATES (Checkouts)
         const subscription = supabase
             .channel('venue-analytics')
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'checkins', 
-                filter: `location_id=eq.${locationId}` 
+                filter: `location_id=eq.${locationId}` // 🔒 Listen ONLY to this venue
             }, (payload) => {
-                console.log("⚡️ Real-time update:", payload);
-                fetchStats(); // Re-fetch logic to update charts
+                fetchStats(); 
             })
             .subscribe();
 
@@ -61,14 +67,12 @@ export default function VenueAnalytics({ locationId }) {
         const todayStr = new Date().toDateString();
         let active = 0;
         let todayCount = 0;
+        let mCount = 0;
+        let fCount = 0;
         
-        // 1. Hourly Traffic (For Today)
+        // Maps
         const hoursMap = new Array(24).fill(0);
-        
-        // 2. Age Buckets
         const ageMap = { '18-24': 0, '25-34': 0, '35-44': 0, '45+': 0 };
-        
-        // 3. Status Map
         const statusMap = { 'Single': 0, 'Taken': 0, 'Complicated': 0 };
 
         data.forEach(c => {
@@ -81,8 +85,12 @@ export default function VenueAnalytics({ locationId }) {
                 hoursMap[date.getHours()]++;
             }
 
-            // Demographics
+            // Demographics (All Time for accurate sampling)
             if (c.profiles) {
+                // Gender Count
+                if (c.profiles.gender === 'Male') mCount++;
+                if (c.profiles.gender === 'Female') fCount++;
+
                 // Status
                 const s = c.profiles.relationship_status;
                 if (s && statusMap[s] !== undefined) statusMap[s]++;
@@ -101,10 +109,23 @@ export default function VenueAnalytics({ locationId }) {
             }
         });
 
+        // Calculate Percentages
+        const totalGender = mCount + fCount;
+        const mPct = totalGender > 0 ? Math.round((mCount / totalGender) * 100) : 0;
+        const fPct = totalGender > 0 ? Math.round((fCount / totalGender) * 100) : 0;
+
         // Set States
-        setSummary({ total: data.length, activeNow: active, today: todayCount });
+        setSummary({ 
+            total: data.length, 
+            activeNow: active, 
+            today: todayCount,
+            maleCount: mCount,
+            femaleCount: fCount,
+            malePct: mPct,
+            femalePct: fPct
+        });
         
-        // Format for Recharts
+        // Format Charts
         setHourlyData(hoursMap.map((count, hour) => ({
             name: `${hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)}${hour >= 12 ? 'pm' : 'am'}`,
             visitors: count
@@ -113,7 +134,7 @@ export default function VenueAnalytics({ locationId }) {
         setAgeData(Object.keys(ageMap).map(key => ({ name: key, count: ageMap[key] })));
         
         setStatusData(Object.keys(statusMap)
-            .filter(k => statusMap[k] > 0) // Only show if data exists
+            .filter(k => statusMap[k] > 0)
             .map(k => ({ name: k, value: statusMap[k] }))
         );
     };
@@ -136,6 +157,34 @@ export default function VenueAnalytics({ locationId }) {
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
                     <div className="text-slate-500 text-xs uppercase font-bold mb-1">Total</div>
                     <div className="text-3xl font-black text-white">{summary.total}</div>
+                </div>
+            </div>
+
+            {/* 🟢 NEW: GENDER RATIO BAR */}
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-purple-500" /> Gender Ratio
+                </h3>
+                <div className="space-y-3">
+                    <div className="flex justify-between text-xs font-bold">
+                        <span className="text-blue-400">{summary.malePct}% Men</span>
+                        <span className="text-pink-400">{summary.femalePct}% Women</span>
+                    </div>
+                    {/* The Visual Bar */}
+                    <div className="h-4 w-full bg-slate-800 rounded-full overflow-hidden flex">
+                        <div 
+                            className="h-full bg-blue-500 transition-all duration-1000" 
+                            style={{ width: `${summary.malePct}%` }} 
+                        />
+                        <div 
+                            className="h-full bg-pink-500 transition-all duration-1000" 
+                            style={{ width: `${summary.femalePct}%` }} 
+                        />
+                    </div>
+                    <div className="flex gap-4 text-[10px] text-slate-500">
+                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> {summary.maleCount} Males</div>
+                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500" /> {summary.femaleCount} Females</div>
+                    </div>
                 </div>
             </div>
 
