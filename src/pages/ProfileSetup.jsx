@@ -173,27 +173,35 @@ export default function ProfileSetup() {
             finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.full_name)}&background=random&color=fff&size=256`;
         }
 
+        // 🟢 FIX: Convert empty strings to NULL for the database
+        const safeBirthDate = formData.birth_date ? formData.birth_date : null;
+        const safeRelationship = formData.relationship_status ? formData.relationship_status : null;
+        const safeInterest = formData.interested_in ? formData.interested_in : null;
+
         const { error } = await supabase.from('profiles').upsert({
             id: user.id,
             full_name: formData.full_name,
             display_name: formData.full_name, 
             handle: cleanHandle,
             gender: formData.gender,
-            birth_date: formData.birth_date, 
-            relationship_status: formData.relationship_status, 
+            birth_date: safeBirthDate, // 🟢 Uses NULL if empty
+            relationship_status: safeRelationship, 
+            interested_in: safeInterest,
             bio: formData.bio,
             avatar_url: finalAvatar, 
             photos: formData.photos, 
-            interested_in: formData.interested_in, // 🟢 Save Interest
             updated_at: new Date()
         });
 
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase Error:", error); // See the real error in console
+            throw error;
+        }
+
         toast.success("Profile updated!");
         navigate('/'); 
     } catch (error) {
-        toast.error("Error updating profile");
-        console.error(error);
+        toast.error(`Error: ${error.message || "Could not save"}`);
     } finally {
         setSaving(false);
     }
