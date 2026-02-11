@@ -14,16 +14,17 @@ import { toast } from 'sonner';
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
 
+// Helper: Calculate distance in miles
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; 
-  const R = 6371e3; 
+  const R = 6371e3; // Earth radius in meters
   const φ1 = lat1 * Math.PI / 180;
   const φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
   const Δλ = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ1) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c * 0.000621371; 
+  return R * c * 0.000621371; // Convert to miles
 };
 
 const Home = () => {
@@ -35,7 +36,7 @@ const Home = () => {
   
   // State
   const [receivedPings, setReceivedPings] = useState([]); 
-  const [activeMission, setActiveMission] = useState(null); // Revealed card for Receiver (Female)
+  const [activeMission, setActiveMission] = useState(null); 
   
   const [userCoords, setUserCoords] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,16 +49,20 @@ const Home = () => {
   
   const [checkingInId, setCheckingInId] = useState(null);
 
+  // 1. Get GPS Position
   useEffect(() => {
     if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(async (position) => {
+      const watchId = navigator.geolocation.watchPosition((position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setUserCoords({ latitude: lat, longitude: lng });
-      });
+      }, (err) => console.error(err), { enableHighAccuracy: true });
+      
+      return () => navigator.geolocation.clearWatch(watchId);
     }
   }, []);
 
+  // 2. Load Data
   useEffect(() => {
     let channel;
     const fetchData = async () => {
@@ -103,8 +108,32 @@ const Home = () => {
     return () => { if (channel) supabase.removeChannel(channel); };
   }, [user]);
 
+  // 🟢 3. GEOFENCE GUARD (The Fix)
+  // This watches your GPS and compares it to your Check-In.
+  // If you are > 0.5 miles away, it auto-ejects you.
+  useEffect(() => {
+    if (currentCheckIn && userCoords && locations.length > 0) {
+        const activeLoc = locations.find(l => l.id === currentCheckIn.location_id);
+        
+        if (activeLoc) {
+            const dist = calculateDistance(
+                userCoords.latitude, 
+                userCoords.longitude, 
+                activeLoc.latitude, 
+                activeLoc.longitude
+            );
+
+            // THRESHOLD: 0.5 Miles
+            if (dist > 0.5) {
+                console.log(`🚫 User is ${dist.toFixed(2)} miles away. Auto-Checking Out.`);
+                handleCheckOut(true); // 'true' flag suppresses the success toast to show a specific warning
+            }
+        }
+    }
+  }, [userCoords, currentCheckIn, locations]);
+
+
   const loadPings = async () => {
-      // 1. Pending Pings (For Mystery Popup) - Receiver Only
       const { data: receivedData } = await supabase.from('pings')
         .select(`*, sender:profiles!from_user_id(*)`)
         .eq('to_user_id', user.id)
@@ -112,11 +141,10 @@ const Home = () => {
         .order('created_at', { ascending: false });
       setReceivedPings(receivedData || []);
 
-      // 2. Active Mission (Revealed but not confirmed) - Receiver Only (Female)
       const { data: missionData } = await supabase.from('pings')
-        .select(`*, sender:profiles!from_user_id(*)`)
-        .eq('to_user_id', user.id)
-        .eq('status', 'revealed')
+        .select(`*, sender:profiles!from_user_id(*), receiver:profiles!to_user_id(*)`)
+        .or(`to_user_id.eq.${user.id},from_user_id.eq.${user.id}`) 
+        .eq('status', 'revealed') 
         .is('met_confirmed', null) 
         .order('updated_at', { ascending: false })
         .limit(1);
@@ -128,14 +156,19 @@ const Home = () => {
       }
   };
 
-  const handleCheckOut = async () => {
+  const handleCheckOut = async (isAutoEject = false) => {
     const checkinId = currentCheckIn?.id;
     if (!checkinId) return;
     try {
         await supabase.from('checkins').update({ is_active: false }).eq('id', checkinId);
         setCurrentCheckIn(null);
         setActiveMission(null); 
-        toast.success("Checked out successfully.");
+        
+        if (isAutoEject) {
+            toast.warning("You left the venue. Automatically checked out.");
+        } else {
+            toast.success("Checked out successfully.");
+        }
     } catch (error) { console.error(error); }
   };
 
@@ -143,7 +176,10 @@ const Home = () => {
       e.stopPropagation(); 
       if (!userCoords) { toast.error("Waiting for GPS..."); return; }
       const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
+      
+      // Strict Check-in Distance (0.5 miles)
       if (dist > 0.5) { toast.error(`Too far! You are ${dist.toFixed(1)} miles away.`); return; }
+      
       setCheckingInId(loc.id);
       try {
           await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
@@ -184,7 +220,6 @@ const Home = () => {
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white"> 
       
-      {/* MYSTERY POPUP */}
       {receivedPings.length > 0 && (
           <MysteryPopup 
             pings={receivedPings} 
@@ -213,7 +248,6 @@ const Home = () => {
         <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
       </div>
 
-      {/* DID WE MEET CARD (For Receiver/Female Only) */}
       {activeMission && (
           <div className="space-y-4 px-4 -mt-4 relative z-20">
              <DidWeMeet 
@@ -235,7 +269,7 @@ const Home = () => {
                         <span className="flex items-center gap-1.5 text-green-400 text-xs font-bold uppercase tracking-wider mb-1">Live Mode Active</span>
                         <h2 className="text-2xl font-bold text-white leading-none"><MapPin className="inline-block w-5 h-5 mr-1 text-amber-500 animate-pulse" /> {currentCheckIn.locations?.name || "Unknown Location"}</h2>
                     </div>
-                    <button onClick={handleCheckOut} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition"><LogOut className="w-5 h-5" /></button>
+                    <button onClick={() => handleCheckOut(false)} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition"><LogOut className="w-5 h-5" /></button>
                 </div>
                 <div className="mt-4"><UserGrid locationId={currentCheckIn.location_id} /></div>
             </div>
@@ -303,13 +337,13 @@ const Home = () => {
 
       <div className="px-4 py-6"><div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div></div>
       
-      {/* 🟢 RECENT CONNECTIONS LIST */}
+      {/* RECENT CONNECTIONS LIST */}
       <div className="mt-8 mx-4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300">
           <div className="grid grid-cols-2 p-4 text-center">
               <div onClick={() => setExpandedSection(expandedSection === 'people' ? null : 'people')} className={`space-y-1 cursor-pointer rounded-xl transition py-2 ${expandedSection === 'people' ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}><div className="flex justify-center text-blue-500 mb-1"><Users className="w-6 h-6" /></div><div className="text-2xl font-black text-white">{stats.peopleMet}</div><div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">People Met</div></div>
               <div onClick={() => setExpandedSection(expandedSection === 'places' ? null : 'places')} className={`space-y-1 border-l border-slate-800 cursor-pointer rounded-xl transition py-2 ${expandedSection === 'places' ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}><div className="flex justify-center text-green-500 mb-1"><MapIcon className="w-6 h-6" /></div><div className="text-2xl font-black text-white">{stats.placesVisited}</div><div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Places Visited</div></div>
           </div>
-          {expandedSection && (<div className="border-t border-slate-800 p-4 bg-slate-950/30 animate-in slide-in-from-top-2 fade-in duration-300">{expandedSection === 'people' && <ConnectionsList />}{expandedSection === 'places' && <PlacesList />}</div>)}
+          {expandedSection && (<div className="border-t border-slate-800 p-4 bg-slate-950/30 animate-in slide-in-from-top-2 fade-in duration-300">{expandedSection === 'people' && <ConnectionsList />}{expandedSection === 'places' && <p className="text-center text-xs text-slate-500">Places History Coming Soon</p>}</div>)}
       </div>
 
     </div>
