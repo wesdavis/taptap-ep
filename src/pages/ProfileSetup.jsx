@@ -456,53 +456,18 @@ export default function ProfileSetup() {
         
         {/* ADMIN ZONE */}
         {formData.is_admin && (
-            <div className="mt-12 pt-8 border-t border-slate-800/50 space-y-6">
-                <div className="flex items-center justify-center gap-2 mb-4">
-                    <ShieldAlert className="w-4 h-4 text-red-500" />
-                    <h3 className="text-[10px] font-bold text-red-500 uppercase tracking-widest text-center">Super Admin Zone</h3>
-                </div>
-                
-                <div className="bg-amber-950/20 border border-amber-900/50 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Crown className="w-4 h-4 text-amber-500" />
-                        <span className="text-xs font-bold text-amber-500 uppercase">3. Manage Promotion</span>
-                    </div>
-                    <div className="flex gap-2">
-                        <Select value={selectedPromoId} onValueChange={setSelectedPromoId}>
-                            <SelectTrigger className="bg-slate-900 border-slate-700 h-9 text-xs"><SelectValue placeholder="Select Venue" /></SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-slate-700 text-white">
-                                {venues.map(v => (
-                                    <SelectItem key={v.id} value={v.id.toString()}>
-                                        {v.name} {v.is_promoted ? '(Active)' : ''}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Button size="sm" onClick={handleSetPromotion} disabled={enriching} className="bg-amber-500 text-black font-bold text-xs h-9">
-                            {enriching ? <Loader2 className="w-3 h-3 animate-spin" /> : "Promote"}
-                        </Button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                    <Button variant="outline" onClick={runGlobalCheckout} disabled={enriching} className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-16 flex flex-col gap-1 text-xs">
-                        <LogOut className="w-4 h-4" />
-                        Evacuate All
-                    </Button>
-                    <Button variant="outline" onClick={runResetMyGame} disabled={enriching} className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 h-16 flex flex-col gap-1 text-xs">
-                        <RefreshCw className="w-4 h-4" />
-                        Reset My History
-                    </Button>
-                </div>
-
-                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3 opacity-50 hover:opacity-100 transition">
-                    <Button variant="outline" onClick={runEnrichment} disabled={enriching} className="w-full border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 h-8 text-xs">
-                        1. Update Coordinates
-                    </Button>
-                    <Button variant="outline" onClick={runPhotoFetch} disabled={enriching} className="w-full border-pink-500/30 text-pink-400 hover:bg-pink-500/10 h-8 text-xs">
-                        2. Fetch Photos
-                    </Button>
-                </div>
+            <div className="mt-8 pt-8 border-t border-slate-800/50">
+                <Button 
+                    type="button" 
+                    onClick={() => navigate('/admin')}
+                    className="w-full h-12 bg-red-500/10 text-red-500 border border-red-500/50 hover:bg-red-500 hover:text-white font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                    <ShieldAlert className="w-5 h-5" />
+                    OPEN SHERIFF'S OFFICE
+                </Button>
+                <p className="text-[10px] text-red-500/40 text-center mt-2 font-mono uppercase tracking-widest">
+                    Authorized Personnel Only
+                </p>
             </div>
         )}
       </div>
