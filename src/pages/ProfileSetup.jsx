@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera, Lock } from 'lucide-react';
+import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera, Lock, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 import * as tf from '@tensorflow/tfjs';
 import * as nsfwjs from 'nsfwjs';
+import * as cocoSsd from '@tensorflow-models/coco-ssd'; // 🟢 NEW: Object Detector
 
 export default function ProfileSetup() {
   const { user, logout } = useAuth();
@@ -23,8 +24,9 @@ export default function ProfileSetup() {
   const [scanning, setScanning] = useState(false); 
 
   // AI SECURITY STATE
-  const [model, setModel] = useState(null);
-  const [modelLoading, setModelLoading] = useState(true);
+  const [nsfwModel, setNsfwModel] = useState(null);
+  const [objectModel, setObjectModel] = useState(null);
+  const [modelsLoading, setModelsLoading] = useState(true);
 
   const [enriching, setEnriching] = useState(false);
   const [venues, setVenues] = useState([]); 
@@ -45,15 +47,22 @@ export default function ProfileSetup() {
 
   useEffect(() => {
     async function init() {
-        // 1. Load AI Model FIRST (Fail Closed Logic)
+        // 1. Load BOTH AI Models (Fail Closed Logic)
         try {
-            console.log("🛡️ Initializing Safety AI...");
-            const _model = await nsfwjs.load();
-            setModel(_model);
-            setModelLoading(false); // Only allow uploads after this is false
-            console.log("✅ Safety AI Ready");
+            console.log("🛡️ Initializing Safety Systems...");
+            
+            // Load them in parallel for speed
+            const [_nsfw, _coco] = await Promise.all([
+                nsfwjs.load(),
+                cocoSsd.load()
+            ]);
+
+            setNsfwModel(_nsfw);
+            setObjectModel(_coco);
+            setModelsLoading(false); // Only allow uploads after BOTH are ready
+            console.log("✅ All Systems Ready: NSFW + Human Detection active.");
         } catch (err) {
-            console.error("Failed to load safety model", err);
+            console.error("Failed to load safety models", err);
             toast.error("Security System failed to load. Please refresh.");
         }
         
@@ -99,9 +108,9 @@ export default function ProfileSetup() {
       }
   }
 
-  // 🟢 SMART FILTER: The "Purity Check"
+  // 🟢 DOUBLE CHECK: Human + Safe
   const checkSafety = async (file) => {
-      if (!model) {
+      if (!nsfwModel || !objectModel) {
           toast.error("Security scanner not ready. Please wait.");
           return false;
       }
@@ -113,7 +122,21 @@ export default function ProfileSetup() {
           
           img.onload = async () => {
               try {
-                  const predictions = await model.classify(img);
+                  // --- STEP 1: IS IT A PERSON? ---
+                  const objects = await objectModel.detect(img);
+                  const person = objects.find(o => o.class === 'person');
+
+                  if (!person) {
+                      console.error("🚨 BLOCKED: No human detected.");
+                      toast.error("Photo Rejected", { description: "Please upload a photo of yourself (Face or Body)." });
+                      resolve(false);
+                      return;
+                  }
+
+                  console.log("✅ Human Detected:", person.score);
+
+                  // --- STEP 2: IS IT SAFE? ---
+                  const predictions = await nsfwModel.classify(img);
                   URL.revokeObjectURL(objectUrl); 
 
                   // Categories: Neutral, Drawing, Sexy, Porn, Hentai
@@ -124,26 +147,29 @@ export default function ProfileSetup() {
                   const pornScore = porn ? porn.probability : 0;
                   const hentaiScore = hentai ? hentai.probability : 0;
                   const sexyScore = sexy ? sexy.probability : 0;
+                  
+                  // Calculate Total Badness
+                  const combinedExplicit = pornScore + hentaiScore;
 
-                  console.log(`🛡️ AI Analysis: Porn=${(pornScore*100).toFixed(0)}% Sexy=${(sexyScore*100).toFixed(0)}%`);
+                  console.log(`🛡️ Explicit Analysis: Porn=${(pornScore*100).toFixed(0)}% Hentai=${(hentaiScore*100).toFixed(0)}% Sexy=${(sexyScore*100).toFixed(0)}%`);
 
-                  // RULE 1: Hard Block on Obvious Porn/Hentai (> 25%)
-                  if (pornScore > 0.25 || hentaiScore > 0.25) {
-                      console.error("🚨 BLOCKED: Explicit content detected.");
+                  // RULE 1: The "Sum of Filth" (> 25% Block)
+                  if (combinedExplicit > 0.25) {
+                      console.error(`🚨 BLOCKED: Explicit content detected (Combined: ${(combinedExplicit*100).toFixed(0)}%)`);
+                      toast.error("Photo Rejected", { description: "Explicit content detected." });
                       resolve(false); 
                       return;
                   }
 
-                  // RULE 2: The "Suspiciously Sexy" Rule (Catches Topless)
-                  // If it is significantly "Sexy" (> 40%) AND has a "Porn" shadow (> 5%), block it.
-                  // (Pure bikinis usually have Porn < 2%)
+                  // RULE 2: The "Suspiciously Sexy" Rule (>40% Sexy + >5% Porn)
                   if (sexyScore > 0.40 && pornScore > 0.05) {
                       console.error("🚨 BLOCKED: Nudity detected (High Sexy + Trace Porn)");
+                      toast.error("Photo Rejected", { description: "Nudity detected." });
                       resolve(false);
                       return;
                   }
 
-                  // If we pass both checks, it is safe.
+                  // Safe
                   resolve(true); 
 
               } catch (err) {
@@ -158,7 +184,7 @@ export default function ProfileSetup() {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (modelLoading) {
+    if (modelsLoading) {
         toast.warning("Security scanner is warming up. One moment...");
         return;
     }
@@ -170,10 +196,6 @@ export default function ProfileSetup() {
         // A. Run Safety Check
         const isSafe = await checkSafety(file);
         if (!isSafe) {
-            toast.error("Image Rejected", { 
-                description: "Our AI detected nudity or explicit content.",
-                duration: 5000
-            });
             e.target.value = null; 
             setScanning(false);
             setUploading(false);
@@ -346,15 +368,15 @@ export default function ProfileSetup() {
                 <div className="flex justify-between items-center">
                     <Label>Your Photos</Label>
                     {/* Visual Security Status */}
-                    {modelLoading ? (
+                    {modelsLoading ? (
                         <span className="text-[10px] text-amber-500 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> Security Loading...</span>
                     ) : (
-                        <span className="text-[10px] text-green-500 flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> Active</span>
+                        <span className="text-[10px] text-green-500 flex items-center gap-1"><UserCheck className="w-3 h-3"/> Active</span>
                     )}
                 </div>
                 
                 <div className="grid grid-cols-3 gap-3">
-                    <label className={`aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700/50 hover:border-amber-500 transition-colors ${scanning || modelLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label className={`aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700/50 hover:border-amber-500 transition-colors ${scanning || modelsLoading ? 'opacity-50 pointer-events-none' : ''}`}>
                         {scanning ? (
                             <div className="flex flex-col items-center gap-1 text-amber-500">
                                 <Loader2 className="w-6 h-6 animate-spin" />
@@ -363,7 +385,7 @@ export default function ProfileSetup() {
                         ) : (
                             uploading ? <Loader2 className="w-6 h-6 animate-spin text-slate-400" /> : <Plus className="w-8 h-8 text-slate-400" />
                         )}
-                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading || modelLoading} />
+                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading || modelsLoading} />
                     </label>
                     {formData.photos.map((url, index) => (
                         <div key={index} className="aspect-square rounded-xl overflow-hidden relative group border border-slate-700">
