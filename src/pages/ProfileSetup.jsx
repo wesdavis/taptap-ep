@@ -99,7 +99,7 @@ export default function ProfileSetup() {
       }
   }
 
-  // 🟢 TUNED SAFETY CHECKER (The "Middle Ground")
+  // 🟢 25% RULE: The Goldilocks Threshold
   const checkSafety = async (file) => {
       if (!model) {
           toast.error("Security scanner not ready. Please wait.");
@@ -123,17 +123,17 @@ export default function ProfileSetup() {
                   
                   console.log("🛡️ Scan Results:", predictions);
 
-                  // 🟢 NEW LOGIC:
-                  // 1. Allow 'Sexy' (Bikinis/Lingerie) completely.
-                  // 2. Raise 'Porn' threshold to 60% (Allows lots of skin, catches genitals).
+                  // 🟢 LOGIC UPDATE:
+                  // Porn/Hentai > 0.25 (25%) -> BLOCK.
+                  // This is tight enough to catch porn, but loose enough for bikinis (which usually score < 0.10 Porn)
                   
-                  if ((porn && porn.probability > 0.60) || (hentai && hentai.probability > 0.50)) {
+                  if ((porn && porn.probability > 0.25) || (hentai && hentai.probability > 0.25)) {
                       console.error("🚨 BLOCKED: Explicit content detected.");
                       resolve(false); 
                   } else {
-                      // If it's just "Sexy" (even 99%), we allow it now.
-                      if (sexy && sexy.probability > 0.80) {
-                          console.log("⚠️ NOTE: High 'Sexy' score detected, but allowed.");
+                      // Allow "Sexy" (Bikinis), but maybe log it if it's super high just for debugging
+                      if (sexy && sexy.probability > 0.90) {
+                          console.log("⚠️ High 'Sexy' score allowed (Likely Bikini/Lingerie)");
                       }
                       resolve(true); // Safe
                   }
@@ -162,7 +162,7 @@ export default function ProfileSetup() {
         const isSafe = await checkSafety(file);
         if (!isSafe) {
             toast.error("Image Rejected", { 
-                description: "Our AI detected explicit content. Please upload a different photo.",
+                description: "Our AI detected content that violates our community guidelines.",
                 duration: 5000
             });
             e.target.value = null; 
