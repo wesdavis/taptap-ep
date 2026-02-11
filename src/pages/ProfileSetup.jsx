@@ -22,7 +22,7 @@ export default function ProfileSetup() {
   const [uploading, setUploading] = useState(false);
   const [scanning, setScanning] = useState(false); 
 
-  // 🟢 AI SECURITY STATE
+  // AI SECURITY STATE
   const [model, setModel] = useState(null);
   const [modelLoading, setModelLoading] = useState(true);
 
@@ -50,7 +50,7 @@ export default function ProfileSetup() {
             console.log("🛡️ Initializing Safety AI...");
             const _model = await nsfwjs.load();
             setModel(_model);
-            setModelLoading(false); // 🟢 Only allow uploads after this is false
+            setModelLoading(false); // Only allow uploads after this is false
             console.log("✅ Safety AI Ready");
         } catch (err) {
             console.error("Failed to load safety model", err);
@@ -99,9 +99,8 @@ export default function ProfileSetup() {
       }
   }
 
-  // 🟢 ROBUST SAFETY CHECKER
+  // 🟢 TUNED SAFETY CHECKER (The "Middle Ground")
   const checkSafety = async (file) => {
-      // 🚨 FAIL CLOSED: If model isn't ready, block everything.
       if (!model) {
           toast.error("Security scanner not ready. Please wait.");
           return false;
@@ -115,7 +114,7 @@ export default function ProfileSetup() {
           img.onload = async () => {
               try {
                   const predictions = await model.classify(img);
-                  URL.revokeObjectURL(objectUrl); // Clean up memory
+                  URL.revokeObjectURL(objectUrl); 
 
                   // Categories: Neutral, Drawing, Sexy, Porn, Hentai
                   const porn = predictions.find(p => p.className === 'Porn');
@@ -124,22 +123,23 @@ export default function ProfileSetup() {
                   
                   console.log("🛡️ Scan Results:", predictions);
 
-                  // 🟢 STRICT THRESHOLDS (10% Tolerance)
-                  if ((porn && porn.probability > 0.10) || (hentai && hentai.probability > 0.10)) {
+                  // 🟢 NEW LOGIC:
+                  // 1. Allow 'Sexy' (Bikinis/Lingerie) completely.
+                  // 2. Raise 'Porn' threshold to 60% (Allows lots of skin, catches genitals).
+                  
+                  if ((porn && porn.probability > 0.60) || (hentai && hentai.probability > 0.50)) {
                       console.error("🚨 BLOCKED: Explicit content detected.");
                       resolve(false); 
-                  } 
-                  // Warning zone for "Sexy" (e.g. suggestive content > 90%)
-                  else if (sexy && sexy.probability > 0.90) {
-                      console.warn("⚠️ BLOCKED: Highly suggestive content.");
-                      resolve(false);
-                  }
-                  else {
+                  } else {
+                      // If it's just "Sexy" (even 99%), we allow it now.
+                      if (sexy && sexy.probability > 0.80) {
+                          console.log("⚠️ NOTE: High 'Sexy' score detected, but allowed.");
+                      }
                       resolve(true); // Safe
                   }
               } catch (err) {
                   console.error("Scan error", err);
-                  resolve(false); // Fail safe
+                  resolve(false); 
               }
           };
       });
@@ -162,10 +162,10 @@ export default function ProfileSetup() {
         const isSafe = await checkSafety(file);
         if (!isSafe) {
             toast.error("Image Rejected", { 
-                description: "Our AI detected content that violates our community guidelines (NSFW).",
+                description: "Our AI detected explicit content. Please upload a different photo.",
                 duration: 5000
             });
-            e.target.value = null; // Clear input
+            e.target.value = null; 
             setScanning(false);
             setUploading(false);
             return; // 🛑 STOP UPLOAD
