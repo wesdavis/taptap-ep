@@ -141,7 +141,7 @@ export default function PublicProfile() {
             });
             if (error) throw error;
             setStatus('pending');
-            toast.success(`Signal sent to ${profile.display_name}!`);
+            toast.success(`TapTap sent to ${profile.display_name}!`);
             navigate('/'); // Optional: Send them back to grid
         } catch (error) {
             toast.error("Tap failed.");
@@ -265,7 +265,7 @@ export default function PublicProfile() {
                         <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 p-2 rounded-2xl shadow-2xl flex items-center gap-3 pr-2">
                             <div className="flex-1 pl-3">
                                 <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">Interested?</div>
-                                <div className="text-sm font-bold text-white">Send a signal</div>
+                                <div className="text-sm font-bold text-white">Send a TapTap</div>
                             </div>
                             <Button 
                                 onClick={handleUniversalTap} 
@@ -283,7 +283,7 @@ export default function PublicProfile() {
                     <div className="fixed bottom-6 left-4 right-4 z-50">
                         <div className="bg-slate-800/90 backdrop-blur-md border border-slate-700 p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl">
                             <Check className="w-5 h-5 text-green-500" />
-                            <span className="font-bold text-slate-300">Signal Sent</span>
+                            <span className="font-bold text-slate-300">TapTap Sent</span>
                         </div>
                     </div>
                 )}
