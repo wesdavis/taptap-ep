@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// 🟢 FIXED IMPORTS (No duplicates)
-import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera } from 'lucide-react';
+import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 import * as tf from '@tensorflow/tfjs';
@@ -23,7 +22,10 @@ export default function ProfileSetup() {
   const [uploading, setUploading] = useState(false);
   const [scanning, setScanning] = useState(false); 
 
+  // 🟢 AI SECURITY STATE
   const [model, setModel] = useState(null);
+  const [modelLoading, setModelLoading] = useState(true);
+
   const [enriching, setEnriching] = useState(false);
   const [venues, setVenues] = useState([]); 
   const [selectedPromoId, setSelectedPromoId] = useState("");
@@ -37,19 +39,24 @@ export default function ProfileSetup() {
     bio: '',
     avatar_url: '',
     photos: [],
-    interested_in: '', // Ensure this is tracked
+    interested_in: '', 
     is_admin: false 
   });
 
   useEffect(() => {
     async function init() {
+        // 1. Load AI Model FIRST (Fail Closed Logic)
         try {
+            console.log("🛡️ Initializing Safety AI...");
             const _model = await nsfwjs.load();
             setModel(_model);
-            console.log("🛡️ Safety AI Loaded");
+            setModelLoading(false); // 🟢 Only allow uploads after this is false
+            console.log("✅ Safety AI Ready");
         } catch (err) {
             console.error("Failed to load safety model", err);
+            toast.error("Security System failed to load. Please refresh.");
         }
+        
         if (user) loadProfile();
     }
     init();
@@ -92,19 +99,47 @@ export default function ProfileSetup() {
       }
   }
 
+  // 🟢 ROBUST SAFETY CHECKER
   const checkSafety = async (file) => {
-      if (!model) return true; 
+      // 🚨 FAIL CLOSED: If model isn't ready, block everything.
+      if (!model) {
+          toast.error("Security scanner not ready. Please wait.");
+          return false;
+      }
+      
       return new Promise((resolve) => {
           const img = document.createElement('img');
-          img.src = URL.createObjectURL(file);
+          const objectUrl = URL.createObjectURL(file);
+          img.src = objectUrl;
+          
           img.onload = async () => {
-              const predictions = await model.classify(img);
-              const porn = predictions.find(p => p.className === 'Porn');
-              const hentai = predictions.find(p => p.className === 'Hentai');
-              if ((porn && porn.probability > 0.5) || (hentai && hentai.probability > 0.5)) {
-                  resolve(false); 
-              } else {
-                  resolve(true); 
+              try {
+                  const predictions = await model.classify(img);
+                  URL.revokeObjectURL(objectUrl); // Clean up memory
+
+                  // Categories: Neutral, Drawing, Sexy, Porn, Hentai
+                  const porn = predictions.find(p => p.className === 'Porn');
+                  const hentai = predictions.find(p => p.className === 'Hentai');
+                  const sexy = predictions.find(p => p.className === 'Sexy');
+                  
+                  console.log("🛡️ Scan Results:", predictions);
+
+                  // 🟢 STRICT THRESHOLDS (10% Tolerance)
+                  if ((porn && porn.probability > 0.10) || (hentai && hentai.probability > 0.10)) {
+                      console.error("🚨 BLOCKED: Explicit content detected.");
+                      resolve(false); 
+                  } 
+                  // Warning zone for "Sexy" (e.g. suggestive content > 90%)
+                  else if (sexy && sexy.probability > 0.90) {
+                      console.warn("⚠️ BLOCKED: Highly suggestive content.");
+                      resolve(false);
+                  }
+                  else {
+                      resolve(true); // Safe
+                  }
+              } catch (err) {
+                  console.error("Scan error", err);
+                  resolve(false); // Fail safe
               }
           };
       });
@@ -114,18 +149,29 @@ export default function ProfileSetup() {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (modelLoading) {
+        toast.warning("Security scanner is warming up. One moment...");
+        return;
+    }
+
     setScanning(true);
     setUploading(true);
 
     try {
+        // A. Run Safety Check
         const isSafe = await checkSafety(file);
         if (!isSafe) {
-            toast.error("Photo rejected.", { description: "Our AI detected inappropriate content." });
+            toast.error("Image Rejected", { 
+                description: "Our AI detected content that violates our community guidelines (NSFW).",
+                duration: 5000
+            });
+            e.target.value = null; // Clear input
             setScanning(false);
             setUploading(false);
-            return; 
+            return; // 🛑 STOP UPLOAD
         }
 
+        // B. Upload to Supabase
         const fileExt = file.name.split('.').pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
@@ -173,7 +219,6 @@ export default function ProfileSetup() {
             finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.full_name)}&background=random&color=fff&size=256`;
         }
 
-        // 🟢 FIX: Convert empty strings to NULL for the database
         const safeBirthDate = formData.birth_date ? formData.birth_date : null;
         const safeRelationship = formData.relationship_status ? formData.relationship_status : null;
         const safeInterest = formData.interested_in ? formData.interested_in : null;
@@ -184,7 +229,7 @@ export default function ProfileSetup() {
             display_name: formData.full_name, 
             handle: cleanHandle,
             gender: formData.gender,
-            birth_date: safeBirthDate, // 🟢 Uses NULL if empty
+            birth_date: safeBirthDate, 
             relationship_status: safeRelationship, 
             interested_in: safeInterest,
             bio: formData.bio,
@@ -194,7 +239,7 @@ export default function ProfileSetup() {
         });
 
         if (error) {
-            console.error("Supabase Error:", error); // See the real error in console
+            console.error("Supabase Error:", error); 
             throw error;
         }
 
@@ -207,7 +252,6 @@ export default function ProfileSetup() {
     }
   }
 
-  // 🟢 GHOSTBUSTER LOGOUT
   const handleLogout = async () => {
     try {
       if (user) {
@@ -227,7 +271,7 @@ export default function ProfileSetup() {
     }
   };
 
-  // --- ADMIN TOOLS (FULLY RESTORED) ---
+  // --- ADMIN TOOLS ---
   const handleSetPromotion = async () => {
     if (!selectedPromoId) return;
     setEnriching(true);
@@ -290,9 +334,18 @@ export default function ProfileSetup() {
             
             {/* PHOTOS SECTION */}
             <div className="space-y-3">
-                <Label>Your Photos</Label>
+                <div className="flex justify-between items-center">
+                    <Label>Your Photos</Label>
+                    {/* Visual Security Status */}
+                    {modelLoading ? (
+                        <span className="text-[10px] text-amber-500 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> Security Loading...</span>
+                    ) : (
+                        <span className="text-[10px] text-green-500 flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> Active</span>
+                    )}
+                </div>
+                
                 <div className="grid grid-cols-3 gap-3">
-                    <label className={`aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700/50 hover:border-amber-500 transition-colors ${scanning ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label className={`aspect-square rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700/50 hover:border-amber-500 transition-colors ${scanning || modelLoading ? 'opacity-50 pointer-events-none' : ''}`}>
                         {scanning ? (
                             <div className="flex flex-col items-center gap-1 text-amber-500">
                                 <Loader2 className="w-6 h-6 animate-spin" />
@@ -301,7 +354,7 @@ export default function ProfileSetup() {
                         ) : (
                             uploading ? <Loader2 className="w-6 h-6 animate-spin text-slate-400" /> : <Plus className="w-8 h-8 text-slate-400" />
                         )}
-                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
+                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading || modelLoading} />
                     </label>
                     {formData.photos.map((url, index) => (
                         <div key={index} className="aspect-square rounded-xl overflow-hidden relative group border border-slate-700">
@@ -311,17 +364,13 @@ export default function ProfileSetup() {
                         </div>
                     ))}
                 </div>
-                <div className="flex items-center gap-2 justify-center pt-2 opacity-50">
-                    <ShieldAlert className="w-3 h-3 text-green-500" />
-                    <span className="text-[10px] text-slate-400">AI Safety Scan Active</span>
-                </div>
             </div>
 
             {/* BASIC INFO */}
             <div className="space-y-2"><Label>Display Name</Label><Input required value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             <div className="space-y-2"><Label>Handle (@)</Label><Input required value={formData.handle} onChange={e => setFormData({...formData, handle: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             
-            {/* 🟢 STRICT BINARY GENDERS & INTERESTS */}
+            {/* STRICT BINARY GENDERS & INTERESTS */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>I am a...</Label>
@@ -345,7 +394,7 @@ export default function ProfileSetup() {
                 </div>
             </div>
 
-            {/* DEMOGRAPHICS - Updated to Stack Vertically for better spacing */}
+            {/* DEMOGRAPHICS */}
             <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                     <Label>Birthday</Label>
@@ -374,7 +423,7 @@ export default function ProfileSetup() {
             <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">{saving ? <Loader2 className="animate-spin" /> : "Save Changes"}</Button>
         </form>
         
-        {/* ADMIN ZONE (FULLY RESTORED) */}
+        {/* ADMIN ZONE */}
         {formData.is_admin && (
             <div className="mt-12 pt-8 border-t border-slate-800/50 space-y-6">
                 <div className="flex items-center justify-center gap-2 mb-4">

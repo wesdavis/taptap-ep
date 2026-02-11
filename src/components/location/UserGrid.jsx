@@ -194,7 +194,7 @@ export default function UserGrid({ locationId }) {
 
     if (users.length === 0) return (
         <div className="p-8 text-center border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/30">
-            <p className="text-slate-500 text-sm">No one else is here yet.</p>
+            <p className="text-slate-500 text-sm">No Taptap Users Present.</p>
             <p className="text-amber-500 text-xs font-bold mt-1">Be the first!</p>
         </div>
     );
@@ -212,7 +212,7 @@ export default function UserGrid({ locationId }) {
                 
                 {activeTapId && (
                     <span className="text-[10px] font-bold text-amber-500 animate-pulse flex items-center gap-1">
-                        <Radio className="w-3 h-3" /> SIGNAL ACTIVE
+                        <Radio className="w-3 h-3" /> TapTap ACTIVE
                     </span>
                 )}
              </div>
