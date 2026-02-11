@@ -337,8 +337,8 @@ export default function ProfileSetup() {
                 </div>
             </div>
 
-            {/* DEMOGRAPHICS */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* DEMOGRAPHICS - Updated to Stack Vertically for better spacing */}
+            <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                     <Label>Birthday</Label>
                     <Input 
@@ -346,13 +346,13 @@ export default function ProfileSetup() {
                         required
                         value={formData.birth_date} 
                         onChange={e => setFormData({...formData, birth_date: e.target.value})}
-                        className="bg-slate-900 border-slate-800" 
+                        className="bg-slate-900 border-slate-800 w-full p-3" 
                     />
                 </div>
                 <div className="space-y-2">
                     <Label>Status</Label>
                     <Select value={formData.relationship_status} onValueChange={val => setFormData({...formData, relationship_status: val})}>
-                        <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectTrigger className="bg-slate-900 border-slate-800 w-full p-3 h-auto"><SelectValue placeholder="Select Status" /></SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-800 text-white">
                             <SelectItem value="Single">Single</SelectItem>
                             <SelectItem value="Taken">Taken</SelectItem>
