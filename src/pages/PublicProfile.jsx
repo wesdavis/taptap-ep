@@ -3,10 +3,28 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { Textarea } from "@/components/ui/textarea"; 
+import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight, User, ShieldBan, Flag } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function PublicProfile() {
     const params = useParams();
@@ -19,7 +37,7 @@ export default function PublicProfile() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState(null);
     
-    // 🟢 NEW: Match Logic State
+    // Match Logic State
     const [canConnect, setCanConnect] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
@@ -30,6 +48,14 @@ export default function PublicProfile() {
     const [photos, setPhotos] = useState([]);
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
     const [selectedPhoto, setSelectedPhoto] = useState(null); 
+
+    // 🟢 BLOCK & REPORT STATE
+    const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+    const [blocking, setBlocking] = useState(false);
+    
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reporting, setReporting] = useState(false);
+    const [reportReason, setReportReason] = useState("");
 
     const isMe = user?.id === userId;
 
@@ -84,7 +110,7 @@ export default function PublicProfile() {
             const matchLoc = myCheckin && targetCheckin && (myCheckin.location_id === targetCheckin.location_id);
             setIsSameLocation(matchLoc);
 
-            // 🟢 4. MATCH LOGIC (Strict Binary)
+            // 4. MATCH LOGIC (Strict Binary)
             if (myProfile && profileData && !isMe) {
                 const myInterest = myProfile.interested_in; 
                 const theirGender = profileData.gender; 
@@ -141,12 +167,54 @@ export default function PublicProfile() {
             });
             if (error) throw error;
             setStatus('pending');
-            toast.success(`TapTap sent to ${profile.display_name}!`);
-            navigate('/'); // Optional: Send them back to grid
+            toast.success(`Signal sent to ${profile.display_name}!`);
+            navigate('/'); 
         } catch (error) {
             toast.error("Tap failed.");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // 🟢 BLOCK USER LOGIC
+    const handleBlockUser = async () => {
+        setBlocking(true);
+        try {
+            const { error } = await supabase.from('blocks').insert({
+                blocker_id: user.id,
+                blocked_id: userId
+            });
+            if (error) throw error;
+            toast.success("User blocked.", { description: "They have been removed from your map." });
+            navigate('/'); 
+        } catch (error) {
+            toast.error("Could not block user.");
+        } finally {
+            setBlocking(false);
+            setIsBlockModalOpen(false);
+        }
+    };
+
+    // 🟢 REPORT USER LOGIC
+    const handleReportUser = async () => {
+        if (!reportReason.trim()) {
+            toast.error("Please explain why you are reporting them.");
+            return;
+        }
+        setReporting(true);
+        try {
+            const { error } = await supabase.from('reports').insert({
+                reporter_id: user.id,
+                reported_id: userId,
+                reason: reportReason
+            });
+            if (error) throw error;
+            toast.success("Report submitted.", { description: "Our team will review this shortly." });
+            setIsReportModalOpen(false);
+        } catch (error) {
+            toast.error("Could not submit report.");
+        } finally {
+            setReporting(false);
         }
     };
 
@@ -258,14 +326,37 @@ export default function PublicProfile() {
 
                 <SharedHistory targetUserId={userId} />
 
-                {/* 🟢 NEW: FLOATING ACTION BAR (The High-End Design) */}
-                {/* Shows ONLY if match logic passes AND pending status is null */}
+                {/* 🟢 SAFETY TOOLS (Block & Report) */}
+                {!isMe && (
+                    <div className="mt-8 flex flex-col gap-2 items-center">
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-500 hover:bg-red-500/10 hover:text-red-400 text-xs flex items-center gap-2 w-32 justify-center"
+                            onClick={() => setIsBlockModalOpen(true)}
+                        >
+                            <ShieldBan className="w-4 h-4" />
+                            Block User
+                        </Button>
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-slate-500 hover:bg-slate-800 hover:text-slate-300 text-xs flex items-center gap-2 w-32 justify-center"
+                            onClick={() => setIsReportModalOpen(true)}
+                        >
+                            <Flag className="w-4 h-4" />
+                            Report
+                        </Button>
+                    </div>
+                )}
+
+                {/* FLOATING ACTION BAR */}
                 {canConnect && status === null && (
-                    <div className="fixed bottom-6 left-4 right-4 z-50 animate-in slide-in-from-bottom-6 duration-500">
+                    <div className="fixed bottom-6 left-4 right-4 z-40 animate-in slide-in-from-bottom-6 duration-500">
                         <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 p-2 rounded-2xl shadow-2xl flex items-center gap-3 pr-2">
                             <div className="flex-1 pl-3">
                                 <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">Interested?</div>
-                                <div className="text-sm font-bold text-white">Send a TapTap</div>
+                                <div className="text-sm font-bold text-white">Send a signal</div>
                             </div>
                             <Button 
                                 onClick={handleUniversalTap} 
@@ -280,10 +371,10 @@ export default function PublicProfile() {
 
                 {/* ALREADY SENT STATE */}
                 {status === 'pending' && (
-                    <div className="fixed bottom-6 left-4 right-4 z-50">
+                    <div className="fixed bottom-6 left-4 right-4 z-40">
                         <div className="bg-slate-800/90 backdrop-blur-md border border-slate-700 p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl">
                             <Check className="w-5 h-5 text-green-500" />
-                            <span className="font-bold text-slate-300">TapTap Sent</span>
+                            <span className="font-bold text-slate-300">Signal Sent</span>
                         </div>
                     </div>
                 )}
@@ -305,6 +396,50 @@ export default function PublicProfile() {
                     />
                 </div>
             )}
+
+            {/* 🟢 BLOCK MODAL */}
+            <AlertDialog open={isBlockModalOpen} onOpenChange={setIsBlockModalOpen}>
+                <AlertDialogContent className="bg-slate-950 border border-slate-800 text-white w-[90%] rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Block {profile.display_name || "User"}?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400">
+                            They will be removed from your map immediately. 
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex gap-2">
+                        <AlertDialogCancel className="bg-transparent border-slate-800 text-slate-300 hover:bg-slate-900 mt-0">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBlockUser} disabled={blocking} className="bg-red-500 text-white hover:bg-red-600 font-bold">
+                            {blocking ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Block Them"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* 🟢 REPORT MODAL */}
+            <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+                <DialogContent className="bg-slate-950 border border-slate-800 text-white w-[90%] rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Report User</DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            Please explain why you are reporting this user.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <Textarea 
+                            placeholder="Reason (e.g. inappropriate behavior, fake profile...)" 
+                            className="bg-slate-900 border-slate-800 min-h-[100px]"
+                            value={reportReason}
+                            onChange={(e) => setReportReason(e.target.value)}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setIsReportModalOpen(false)}>Cancel</Button>
+                        <Button onClick={handleReportUser} disabled={reporting} className="bg-slate-100 text-black hover:bg-slate-200 font-bold">
+                            {reporting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit Report"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -320,7 +455,7 @@ function SharedHistory({ targetUserId }) {
             const { data } = await supabase.from('pings')
                 .select('created_at, locations(name)')
                 .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${user.id})`)
-                .eq('status', 'accepted') // Only show if you actually met
+                .eq('status', 'accepted') 
                 .order('created_at', { ascending: false });
             
             setEvents(data || []);
