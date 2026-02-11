@@ -99,7 +99,7 @@ export default function ProfileSetup() {
       }
   }
 
-  // 🟢 25% RULE: The Goldilocks Threshold
+  // 🟢 SMART FILTER: The "Purity Check"
   const checkSafety = async (file) => {
       if (!model) {
           toast.error("Security scanner not ready. Please wait.");
@@ -121,22 +121,31 @@ export default function ProfileSetup() {
                   const hentai = predictions.find(p => p.className === 'Hentai');
                   const sexy = predictions.find(p => p.className === 'Sexy');
                   
-                  console.log("🛡️ Scan Results:", predictions);
+                  const pornScore = porn ? porn.probability : 0;
+                  const hentaiScore = hentai ? hentai.probability : 0;
+                  const sexyScore = sexy ? sexy.probability : 0;
 
-                  // 🟢 LOGIC UPDATE:
-                  // Porn/Hentai > 0.25 (25%) -> BLOCK.
-                  // This is tight enough to catch porn, but loose enough for bikinis (which usually score < 0.10 Porn)
-                  
-                  if ((porn && porn.probability > 0.25) || (hentai && hentai.probability > 0.25)) {
+                  console.log(`🛡️ AI Analysis: Porn=${(pornScore*100).toFixed(0)}% Sexy=${(sexyScore*100).toFixed(0)}%`);
+
+                  // RULE 1: Hard Block on Obvious Porn/Hentai (> 25%)
+                  if (pornScore > 0.25 || hentaiScore > 0.25) {
                       console.error("🚨 BLOCKED: Explicit content detected.");
                       resolve(false); 
-                  } else {
-                      // Allow "Sexy" (Bikinis), but maybe log it if it's super high just for debugging
-                      if (sexy && sexy.probability > 0.90) {
-                          console.log("⚠️ High 'Sexy' score allowed (Likely Bikini/Lingerie)");
-                      }
-                      resolve(true); // Safe
+                      return;
                   }
+
+                  // RULE 2: The "Suspiciously Sexy" Rule (Catches Topless)
+                  // If it is significantly "Sexy" (> 40%) AND has a "Porn" shadow (> 5%), block it.
+                  // (Pure bikinis usually have Porn < 2%)
+                  if (sexyScore > 0.40 && pornScore > 0.05) {
+                      console.error("🚨 BLOCKED: Nudity detected (High Sexy + Trace Porn)");
+                      resolve(false);
+                      return;
+                  }
+
+                  // If we pass both checks, it is safe.
+                  resolve(true); 
+
               } catch (err) {
                   console.error("Scan error", err);
                   resolve(false); 
@@ -162,7 +171,7 @@ export default function ProfileSetup() {
         const isSafe = await checkSafety(file);
         if (!isSafe) {
             toast.error("Image Rejected", { 
-                description: "Our AI detected content that violates our community guidelines.",
+                description: "Our AI detected nudity or explicit content.",
                 duration: 5000
             });
             e.target.value = null; 
