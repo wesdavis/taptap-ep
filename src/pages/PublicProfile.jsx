@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PublicProfile() {
@@ -18,16 +18,18 @@ export default function PublicProfile() {
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState(null);
-    const [myGender, setMyGender] = useState(null);
+    
+    // 🟢 NEW: Match Logic State
+    const [canConnect, setCanConnect] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Location State
     const [isSameLocation, setIsSameLocation] = useState(false);
     
-    // 🟢 NEW: Gallery State
+    // Gallery State
     const [photos, setPhotos] = useState([]);
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
-    const [selectedPhoto, setSelectedPhoto] = useState(null); // For Full Screen
+    const [selectedPhoto, setSelectedPhoto] = useState(null); 
 
     const isMe = user?.id === userId;
 
@@ -51,22 +53,20 @@ export default function PublicProfile() {
             if (error) throw error;
             setProfile(profileData);
 
-            // 🟢 NEW: Setup Photos Array (Avatar + Extra Photos)
+            // Setup Gallery
             const p = (profileData.photos && profileData.photos.length > 0) 
                 ? profileData.photos 
                 : [profileData.avatar_url];
             setPhotos(p);
 
-            // 2. Fetch MY Gender
+            // 2. Fetch MY Profile (Gender + Interest)
             const { data: myProfile } = await supabase
                 .from('profiles')
-                .select('gender')
+                .select('gender, interested_in')
                 .eq('id', user.id)
                 .single();
-            setMyGender(myProfile?.gender);
 
             // 3. LOCATION CHECK
-            // Fetch MY active checkin
             const { data: myCheckin } = await supabase
                 .from('checkins')
                 .select('location_id')
@@ -74,7 +74,6 @@ export default function PublicProfile() {
                 .eq('is_active', true)
                 .maybeSingle();
 
-            // Fetch TARGET'S active checkin
             const { data: targetCheckin } = await supabase
                 .from('checkins')
                 .select('location_id')
@@ -82,11 +81,23 @@ export default function PublicProfile() {
                 .eq('is_active', true)
                 .maybeSingle();
 
-            // Are we at the same place?
-            const match = myCheckin && targetCheckin && (myCheckin.location_id === targetCheckin.location_id);
-            setIsSameLocation(match);
+            const matchLoc = myCheckin && targetCheckin && (myCheckin.location_id === targetCheckin.location_id);
+            setIsSameLocation(matchLoc);
 
-            // 4. Check Status
+            // 🟢 4. MATCH LOGIC (Strict Binary)
+            if (myProfile && profileData && !isMe) {
+                const myInterest = myProfile.interested_in; 
+                const theirGender = profileData.gender; 
+
+                let allowed = false;
+                if (myInterest === 'Male' && theirGender === 'Male') allowed = true;
+                if (myInterest === 'Female' && theirGender === 'Female') allowed = true;
+                
+                // Only allow connection if matched AND at same location
+                setCanConnect(allowed && matchLoc);
+            }
+
+            // 5. Check Existing Ping Status
             if (myCheckin) {
                 const { data: ping } = await supabase
                     .from('pings')
@@ -130,7 +141,8 @@ export default function PublicProfile() {
             });
             if (error) throw error;
             setStatus('pending');
-            toast.success(`You tapped ${profile.full_name}!`);
+            toast.success(`Signal sent to ${profile.display_name}!`);
+            navigate('/'); // Optional: Send them back to grid
         } catch (error) {
             toast.error("Tap failed.");
         } finally {
@@ -138,7 +150,7 @@ export default function PublicProfile() {
         }
     };
 
-    // 🟢 NEW: Gallery Navigation Logic
+    // Gallery Logic
     const nextPhoto = (e) => {
         e.stopPropagation();
         setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
@@ -161,8 +173,6 @@ export default function PublicProfile() {
 
     if (!profile) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">User not found</div>;
 
-    const isFemale = (myGender || '').toLowerCase() === 'female';
-
     return (
         <div className="min-h-screen bg-slate-950 text-white p-4 pb-32">
             <div className="flex items-center gap-4 mb-6">
@@ -174,35 +184,43 @@ export default function PublicProfile() {
 
             <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
                 
-                {/* 🟢 NEW: SWIPEABLE MAIN GALLERY */}
+                {/* GALLERY COMPONENT */}
                 <div 
                     className="w-full max-w-sm mb-6 relative aspect-square rounded-2xl overflow-hidden border-2 border-slate-800 shadow-2xl group cursor-pointer"
                     onClick={openFullScreen}
                 >
-                    <img 
-                        src={photos[currentPhotoIndex]} 
-                        className="w-full h-full object-cover transition-all duration-500" 
-                        alt="Profile"
-                    />
+                    {photos.length > 0 ? (
+                        <img 
+                            src={photos[currentPhotoIndex]} 
+                            className="w-full h-full object-cover transition-all duration-500" 
+                            alt="Profile"
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                            <User className="w-20 h-20 text-slate-600" />
+                        </div>
+                    )}
                     
-                    {/* Progress Bars (Like Instagram Stories) */}
-                    <div className="absolute top-2 left-2 right-2 flex gap-1 z-20">
-                        {photos.map((_, i) => (
-                            <div 
-                                key={i} 
-                                className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i === currentPhotoIndex ? 'bg-white' : 'bg-white/30'}`} 
-                            />
-                        ))}
-                    </div>
+                    {/* Progress Bars */}
+                    {photos.length > 1 && (
+                        <div className="absolute top-2 left-2 right-2 flex gap-1 z-20">
+                            {photos.map((_, i) => (
+                                <div 
+                                    key={i} 
+                                    className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i === currentPhotoIndex ? 'bg-white' : 'bg-white/30'}`} 
+                                />
+                            ))}
+                        </div>
+                    )}
 
-                    {/* Navigation Areas (Invisible Tap Zones) */}
+                    {/* Navigation Tap Zones */}
                     <div className="absolute inset-0 flex z-10">
                         <div className="w-1/3 h-full" onClick={prevPhoto} />
-                        <div className="w-1/3 h-full" onClick={openFullScreen} /> {/* Center tap opens full screen */}
+                        <div className="w-1/3 h-full" onClick={openFullScreen} /> 
                         <div className="w-1/3 h-full" onClick={nextPhoto} />
                     </div>
 
-                    {/* Arrows (Visible on hover or touch) */}
+                    {/* Arrows */}
                     {photos.length > 1 && (
                         <>
                             <button onClick={prevPhoto} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition pointer-events-none z-20">
@@ -231,29 +249,42 @@ export default function PublicProfile() {
                     <Badge variant="secondary" className="bg-slate-800 text-slate-300 px-3 py-1">
                         {profile.gender || 'User'}
                     </Badge>
+                    {profile.relationship_status && (
+                        <Badge variant="secondary" className="bg-slate-800 text-slate-300 px-3 py-1">
+                            {profile.relationship_status}
+                        </Badge>
+                    )}
                 </div>
 
-                {/* Shared History Component */}
                 <SharedHistory targetUserId={userId} />
 
-                {/* THE SMART BUTTON LOGIC */}
-                {isFemale && !isMe && isSameLocation && status === null && (
-                    <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
-                        <Button 
-                            disabled={isSubmitting}
-                            className="w-full h-14 text-lg font-bold bg-amber-500 hover:bg-amber-600 text-black shadow-lg shadow-amber-900/20 rounded-2xl animate-in slide-in-from-bottom-4 disabled:opacity-50"
-                            onClick={handleUniversalTap}
-                        >
-                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <><Zap className="w-5 h-5 mr-2 fill-black" /> TAP-TAP TO CONNECT</>}
-                        </Button>
+                {/* 🟢 NEW: FLOATING ACTION BAR (The High-End Design) */}
+                {/* Shows ONLY if match logic passes AND pending status is null */}
+                {canConnect && status === null && (
+                    <div className="fixed bottom-6 left-4 right-4 z-50 animate-in slide-in-from-bottom-6 duration-500">
+                        <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 p-2 rounded-2xl shadow-2xl flex items-center gap-3 pr-2">
+                            <div className="flex-1 pl-3">
+                                <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">Interested?</div>
+                                <div className="text-sm font-bold text-white">Send a signal</div>
+                            </div>
+                            <Button 
+                                onClick={handleUniversalTap} 
+                                disabled={isSubmitting}
+                                className="h-12 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                            >
+                                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <div className="flex items-center gap-2"><Zap className="w-5 h-5 fill-black" /> TAP</div>}
+                            </Button>
+                        </div>
                     </div>
                 )}
 
-                {isFemale && !isMe && status === 'pending' && (
-                    <div className="fixed bottom-24 left-0 right-0 px-6 z-50">
-                        <Button disabled className="w-full h-14 text-lg font-bold bg-slate-800 text-slate-400 border border-slate-700 rounded-2xl">
-                            <Check className="w-5 h-5 mr-2" /> TAP SENT
-                        </Button>
+                {/* ALREADY SENT STATE */}
+                {status === 'pending' && (
+                    <div className="fixed bottom-6 left-4 right-4 z-50">
+                        <div className="bg-slate-800/90 backdrop-blur-md border border-slate-700 p-4 rounded-2xl flex items-center justify-center gap-3 shadow-xl">
+                            <Check className="w-5 h-5 text-green-500" />
+                            <span className="font-bold text-slate-300">Signal Sent</span>
+                        </div>
                     </div>
                 )}
             </div>
@@ -289,7 +320,7 @@ function SharedHistory({ targetUserId }) {
             const { data } = await supabase.from('pings')
                 .select('created_at, locations(name)')
                 .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${user.id})`)
-                .eq('status', 'accepted')
+                .eq('status', 'accepted') // Only show if you actually met
                 .order('created_at', { ascending: false });
             
             setEvents(data || []);
