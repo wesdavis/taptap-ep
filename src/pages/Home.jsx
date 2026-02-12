@@ -46,6 +46,7 @@ const Home = () => {
   const [activeUsersAtLocation, setActiveUsersAtLocation] = useState({}); 
   const [stats, setStats] = useState({ peopleMet: 0, placesVisited: 0 });
   const [expandedSection, setExpandedSection] = useState(null); 
+  const [visibleCount, setVisibleCount] = useState(5); // 🟢 NEW: Start with 5 venues
   
   const [checkingInId, setCheckingInId] = useState(null);
 
@@ -108,9 +109,7 @@ const Home = () => {
     return () => { if (channel) supabase.removeChannel(channel); };
   }, [user]);
 
-  // 🟢 3. GEOFENCE GUARD (The Fix)
-  // This watches your GPS and compares it to your Check-In.
-  // If you are > 0.5 miles away, it auto-ejects you.
+  // 🟢 3. GEOFENCE GUARD
   useEffect(() => {
     if (currentCheckIn && userCoords && locations.length > 0) {
         const activeLoc = locations.find(l => l.id === currentCheckIn.location_id);
@@ -126,7 +125,7 @@ const Home = () => {
             // THRESHOLD: 0.5 Miles
             if (dist > 0.5) {
                 console.log(`🚫 User is ${dist.toFixed(2)} miles away. Auto-Checking Out.`);
-                handleCheckOut(true); // 'true' flag suppresses the success toast to show a specific warning
+                handleCheckOut(true); 
             }
         }
     }
@@ -309,7 +308,8 @@ const Home = () => {
             </div>
         )}
 
-        {otherLocations.map((loc) => {
+        {/* 🟢 MODIFIED: Slice the list based on visibleCount */}
+        {otherLocations.slice(0, visibleCount).map((loc) => {
             const imageUrl = (loc.google_photos && loc.google_photos.length > 0) ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400` : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");
             const count = activeUsersAtLocation[loc.id] || 0;
             const vibe = getPartyVibe(count);
@@ -333,6 +333,16 @@ const Home = () => {
               </div>
             );
         })}
+
+        {/* 🟢 NEW: LOAD MORE BUTTON */}
+        {visibleCount < otherLocations.length && (
+            <button 
+                onClick={() => setVisibleCount(prev => prev + 5)}
+                className="w-full py-3 mt-4 bg-slate-900 border border-slate-800 text-slate-400 font-bold text-sm rounded-xl hover:bg-slate-800 transition"
+            >
+                Load More Venues
+            </button>
+        )}
       </div>
 
       <div className="px-4 py-6"><div className="h-px w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div></div>
