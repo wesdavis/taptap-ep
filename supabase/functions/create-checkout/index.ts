@@ -1,9 +1,10 @@
 import { serve } from "std/http/server.ts"
 import Stripe from "stripe"
 
+// 🟢 FIX: Added 'x-supabase-client-platform' to the allowed headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform',
 }
 
 serve(async (req) => {
@@ -40,11 +41,11 @@ serve(async (req) => {
         },
       ],
       mode: 'payment',
-      // Redirect back to the app (Business Dashboard)
+      // Redirect back to the app
       success_url: `${return_url}?session_id={CHECKOUT_SESSION_ID}&location_id=${location_id}`,
       cancel_url: `${return_url}`,
       metadata: {
-        location_id: location_id, // Store this so we know WHO paid
+        location_id: location_id,
         user_id: user_id,
         type: 'venue_boost'
       },
