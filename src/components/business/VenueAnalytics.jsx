@@ -5,7 +5,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, Legend, CartesianGrid 
 } from 'recharts';
 import { Users, TrendingUp, Heart, Activity, Calendar, Clock, ArrowLeftRight, Repeat } from 'lucide-react';
-import { motion } from 'framer-motion'; // 🟢 NEW: Animations
+import { motion } from 'framer-motion';
 
 const COLORS = ['#f59e0b', '#3b82f6', '#ec4899', '#10b981']; 
 
@@ -22,44 +22,44 @@ export default function VenueAnalytics({ locationId }) {
         peakHour: 'N/A',
         malePct: 0,
         femalePct: 0,
-        newCustomers: 0,      // 🟢 NEW
-        returningCustomers: 0 // 🟢 NEW
+        newCustomers: 0,
+        returningCustomers: 0
     });
     
     const [chartData, setChartData] = useState([]); 
-    const [demographics, setDemographics] = useState({ age: [], status: [], loyalty: [] }); // 🟢 ADDED LOYALTY
+    const [demographics, setDemographics] = useState({ age: [], status: [], loyalty: [] });
 
     useEffect(() => {
-        fetchData();
-        const sub = supabase.channel('analytics-realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'checkins', filter: `location_id=eq.${locationId}` }, 
-            () => fetchData())
-            .subscribe();
-        return () => supabase.removeChannel(sub);
+        if (locationId) {
+            fetchData();
+            const sub = supabase.channel('analytics-realtime')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'checkins', filter: `location_id=eq.${locationId}` }, 
+                () => fetchData())
+                .subscribe();
+            return () => supabase.removeChannel(sub);
+        }
     }, [locationId, view]);
 
     const fetchData = async () => {
-        if (!locationId) return;
-        
-        // 1. Fetch THIS WEEK'S Checkins
+        // 1. Fetch THIS WEEK'S Checkins (Strictly for this location)
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 7);
 
         const { data: recentCheckins } = await supabase
             .from('checkins')
             .select(`*, profiles(birth_date, relationship_status, gender)`)
-            .eq('location_id', locationId)
+            .eq('location_id', locationId) // 🔒 STRICT FILTER
             .gte('created_at', sinceDate.toISOString());
 
-        // 2. 🟢 FETCH HISTORICAL DATA (To check for returning customers)
-        // We need to know if these users have EVER been here before
+        // 2. FETCH HISTORY (To determine Loyalty)
+        // Get unique User IDs from this week to check their history
         const userIds = recentCheckins?.map(c => c.user_id) || [];
         const uniqueUserIds = [...new Set(userIds)];
         
         let loyaltyMap = {}; // { userId: true/false } (true = returning)
 
         if (uniqueUserIds.length > 0) {
-            // Ask DB: "Find checkins for these users at this location BEFORE 7 days ago"
+            // Ask DB: "Have these specific users been at THIS location BEFORE 7 days ago?"
             const { data: history } = await supabase
                 .from('checkins')
                 .select('user_id')
@@ -73,20 +73,20 @@ export default function VenueAnalytics({ locationId }) {
             });
         }
 
-        if (recentCheckins) processData(recentCheckins, loyaltyMap);
+        if (recentCheckins) processData(recentCheckins, uniqueUserIds, loyaltyMap);
         setLoading(false);
     };
 
-    const processData = (data, loyaltyMap) => {
+    const processData = (data, uniqueUserIds, loyaltyMap) => {
         const now = new Date();
         const todayStr = now.toDateString();
         
         // KPI CALCULATIONS
         const live = data.filter(c => c.is_active).length;
         const today = data.filter(c => new Date(c.created_at).toDateString() === todayStr).length;
-        const weekTotal = data.length;
+        const weekTotal = data.length; // Total VISITS (volume)
 
-        // Gender
+        // Gender (Counted by Visits to show volume)
         let m = 0, f = 0;
         data.forEach(c => {
             if (c.profiles?.gender === 'Male') m++;
@@ -94,13 +94,13 @@ export default function VenueAnalytics({ locationId }) {
         });
         const totalGen = m + f;
 
-        // 🟢 LOYALTY CALCULATION
-        let newCust = 0;
-        let retCust = 0;
-        data.forEach(c => {
-            // If we found them in history, they are returning. If not, they are new.
-            if (loyaltyMap[c.user_id]) retCust++;
-            else newCust++;
+        // 🟢 LOYALTY CALCULATION (Fixed: Counting UNIQUE HUMANS)
+        let uniqueNew = 0;
+        let uniqueRet = 0;
+        
+        uniqueUserIds.forEach(id => {
+            if (loyaltyMap[id]) uniqueRet++; // They have been here before
+            else uniqueNew++; // First time ever seeing them
         });
 
         // VIEW LOGIC (Today vs Week)
@@ -158,15 +158,15 @@ export default function VenueAnalytics({ locationId }) {
             peakHour: peakH, busiestDay: busyDay, 
             malePct: totalGen ? Math.round((m/totalGen)*100) : 0, 
             femalePct: totalGen ? Math.round((f/totalGen)*100) : 0,
-            newCustomers: newCust, returningCustomers: retCust
+            newCustomers: uniqueNew, returningCustomers: uniqueRet
         });
         setChartData(mainChart);
         setDemographics({
             age: Object.keys(ageMap).map(k => ({ name: k, count: ageMap[k] })),
             status: Object.keys(statusMap).filter(k => statusMap[k]>0).map(k => ({ name: k, value: statusMap[k] })),
             loyalty: [
-                { name: 'New', value: newCust },
-                { name: 'Regulars', value: retCust }
+                { name: 'New Faces', value: uniqueNew },
+                { name: 'Regulars', value: uniqueRet }
             ]
         });
     };
@@ -174,19 +174,13 @@ export default function VenueAnalytics({ locationId }) {
     if (loading) return <div className="h-64 bg-slate-900 rounded-xl animate-pulse"/>;
 
     return (
-        <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ duration: 0.5 }}
-            className="space-y-6"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="space-y-6">
             
             {/* 1. CONTROLS */}
             <div className="flex gap-2 mb-2 bg-slate-900 p-1 rounded-lg w-fit border border-slate-800">
                 {['today', 'week'].map(v => (
                     <button 
-                        key={v}
-                        onClick={() => setView(v)}
+                        key={v} onClick={() => setView(v)}
                         className={`px-4 py-1.5 text-xs font-bold rounded-md transition capitalize ${view === v ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}
                     >
                         {v === 'week' ? 'Past 7 Days' : v}
@@ -194,7 +188,7 @@ export default function VenueAnalytics({ locationId }) {
                 ))}
             </div>
 
-            {/* 2. KPIs with Animation */}
+            {/* 2. KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                     { label: 'Active Now', val: stats.liveCount, icon: Activity, color: 'text-emerald-500' },
@@ -202,11 +196,7 @@ export default function VenueAnalytics({ locationId }) {
                     { label: view === 'today' ? 'Peak Hour' : 'Busiest Day', val: view === 'today' ? stats.peakHour : stats.busiestDay, icon: view==='today'?Clock:Calendar, color: 'text-amber-500' },
                     { label: 'New Faces', val: stats.newCustomers, icon: Repeat, color: 'text-purple-500' }
                 ].map((kpi, i) => (
-                    <motion.div 
-                        key={i}
-                        whileHover={{ scale: 1.02 }}
-                        className="bg-slate-900 border border-slate-800 p-4 rounded-xl"
-                    >
+                    <motion.div key={i} whileHover={{ scale: 1.02 }} className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
                         <div className={`${kpi.color} text-[10px] uppercase font-bold flex items-center gap-1`}>
                             <kpi.icon className="w-3 h-3"/> {kpi.label}
                         </div>
@@ -216,13 +206,9 @@ export default function VenueAnalytics({ locationId }) {
             </div>
 
             {/* 3. MAIN CHART */}
-            <motion.div 
-                layout 
-                className="bg-slate-900 border border-slate-800 p-5 rounded-xl"
-            >
+            <motion.div layout className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
                 <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-amber-500" /> 
-                    {view === 'today' ? 'Hourly Traffic' : 'Daily Traffic'}
+                    <TrendingUp className="w-4 h-4 text-amber-500" /> {view === 'today' ? 'Hourly Traffic' : 'Daily Traffic'}
                 </h3>
                 <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -255,8 +241,6 @@ export default function VenueAnalytics({ locationId }) {
 
             {/* 4. DEMOGRAPHICS & LOYALTY */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Gender & Age */}
                 <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-6">
                     <div>
                         <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
@@ -271,7 +255,6 @@ export default function VenueAnalytics({ locationId }) {
                             <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500"/> {stats.femalePct}% Female</span>
                         </div>
                     </div>
-
                     <div className="pt-4 border-t border-slate-800">
                         <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
                             <Users className="w-4 h-4 text-blue-500" /> Age Distribution
@@ -289,33 +272,24 @@ export default function VenueAnalytics({ locationId }) {
                     </div>
                 </div>
 
-                {/* Loyalty (New vs Returning) */}
                 <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col">
                     <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
                         <Repeat className="w-4 h-4 text-emerald-500" /> Customer Loyalty
                     </h3>
                     <div className="flex-1 min-h-[160px] relative">
-                        {demographics.loyalty.length > 0 && stats.weekTotal > 0 ? (
+                        {(stats.newCustomers + stats.returningCustomers) > 0 ? (
                             <ResponsiveContainer>
                                 <PieChart>
-                                    <Pie 
-                                        data={demographics.loyalty} 
-                                        innerRadius={50} 
-                                        outerRadius={70} 
-                                        paddingAngle={5} 
-                                        dataKey="value"
-                                    >
-                                        <Cell fill="#a855f7" /> {/* New = Purple */}
-                                        <Cell fill="#10b981" /> {/* Regulars = Emerald */}
+                                    <Pie data={demographics.loyalty} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
+                                        <Cell fill="#a855f7" /> 
+                                        <Cell fill="#10b981" /> 
                                     </Pie>
                                     <Legend verticalAlign="bottom" height={36} iconSize={8} wrapperStyle={{fontSize: '11px'}} />
                                     <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155'}} />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">
-                                Not enough history yet
-                            </div>
+                            <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">Not enough history yet</div>
                         )}
                     </div>
                 </div>
