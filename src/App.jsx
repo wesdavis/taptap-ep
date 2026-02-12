@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'; // 🟢 Added useRef
+import { useEffect, useRef } from 'react'; 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/AuthContext';
@@ -17,7 +17,7 @@ import Achievements from './pages/Achievements';
 import Settings from './pages/Settings';
 import BusinessDashboard from './pages/BusinessDashboard';
 import { supabase } from '@/lib/supabase';
-import AdminDashboard from './pages/AdminDashboard'; // Import at top 
+import AdminDashboard from './pages/AdminDashboard'; 
 
 
 const queryClient = new QueryClient();
@@ -32,7 +32,6 @@ const PageNotFound = () => (
 );
 
 const AuthenticatedApp = () => {
-  // 🟢 Added 'logout' to destructuring
   const { user, loading, profileMissing, logout } = useAuth();
   const timerRef = useRef(null);
 
@@ -78,9 +77,12 @@ const AuthenticatedApp = () => {
   }, [user, logout]);
 
 
-  // 🟢 2. ONESIGNAL INIT LOGIC
+  // 🟢 2. ONESIGNAL INIT LOGIC (FIXED)
   useEffect(() => {
-    if (user) {
+    // 🛡️ Guard: Only run if user exists AND OneSignal hasn't started yet
+    if (user && !window.OneSignalInitialized) {
+      window.OneSignalInitialized = true; // 🚩 Set flag immediately
+
       OneSignal.init({
         appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", 
         allowLocalhostAsSecureOrigin: true,
@@ -141,9 +143,8 @@ const AuthenticatedApp = () => {
       <Route path="/settings" element={!user ? <Navigate to="/landing" replace /> : <Settings />} />
       <Route path="/business" element={!user ? <Navigate to="/landing" replace /> : <BusinessDashboard />} />
       <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/landing" />} />
-      <Route path="*" element={<PageNotFound />} /></Routes>
-      
-    
+      <Route path="*" element={<PageNotFound />} />
+    </Routes>
   );
 };
 

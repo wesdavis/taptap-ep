@@ -1,32 +1,71 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import Stripe from 'https://esm.sh/stripe@14.10.0?target=deno' // 🟢 UPDATED: Newer, stable version
 
-// Setup type definitions for built-in Supabase Runtime APIs
-import "@supabase/functions-js/edge-runtime.d.ts"
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
-console.log("Hello from Functions!")
-
-Deno.serve(async (req) => {
-  const { name } = await req.json()
-  const data = {
-    message: `Hello ${name}!`,
+serve(async (req) => {
+  // 1. Handle CORS Preflight (The "OPTIONS" request)
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
-  return new Response(
-    JSON.stringify(data),
-    { headers: { "Content-Type": "application/json" } },
-  )
+  try {
+    // 2. Initialize Stripe
+    // If the key is missing, this will throw a clear error instead of crashing silently
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+    if (!stripeKey) {
+      throw new Error("Missing STRIPE_SECRET_KEY environment variable");
+    }
+
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: '2023-10-16', // Updated API version
+      httpClient: Stripe.createFetchHttpClient(),
+    })
+
+    const { price_id, location_id, user_id, return_url } = await req.json()
+
+    // 3. Create Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: price_id,
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${return_url}?session_id={CHECKOUT_SESSION_ID}&location_id=${location_id}`,
+      cancel_url: `${return_url}`,
+      metadata: {
+        location_id: location_id,
+        user_id: user_id,
+        type: 'venue_boost'
+      },
+    })
+
+    // 4. Success Response
+    return new Response(
+      JSON.stringify({ url: session.url }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
+      },
+    )
+
+  } catch (error) {
+    console.error("Payment Error:", error.message); // This will show in Supabase logs
+    
+    // 5. Error Response (WITH CORS HEADERS)
+    // Even if it crashes, we return the headers so the browser doesn't block it.
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      },
+    )
+  }
 })
-
-/* To invoke locally:
-
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/create-checkout' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
-
-*/
