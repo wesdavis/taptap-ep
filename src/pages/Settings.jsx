@@ -122,13 +122,6 @@ export default function Settings() {
           </Button>
         </div>
       </div>
-      {/* Danger Zone */}
-        <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 shadow-xl space-y-3">
-          <h2 className="font-bold text-xs uppercase tracking-wider text-slate-400 mb-2">Danger Zone</h2>
-          
-          <Button onClick={handleLogout} variant="ghost" className="w-full justify-start gap-2 text-slate-300 hover:text-white hover:bg-slate-800">
-            <LogOut className="w-4 h-4" /> Sign Out
-          </Button>
 
           {/* 🔴 THE CRASH BUTTON */}
           <Button 
@@ -143,6 +136,6 @@ export default function Settings() {
             <Trash2 className="w-3 h-3" /> Delete Account
           </Button>
         </div>
-    </div>
+    
   );
 }
