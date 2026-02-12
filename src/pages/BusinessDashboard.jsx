@@ -1,23 +1,28 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom'; // 🟢 Added useSearchParams
 import VenueAnalytics from '@/components/business/VenueAnalytics';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Store, MapPin, Save, ArrowLeft, TrendingUp } from 'lucide-react';
+import { Loader2, Store, MapPin, Save, ArrowLeft, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+
+// 🟢 REPLACE THIS WITH YOUR ACTUAL STRIPE PRICE ID FROM THE DASHBOARD
+const STRIPE_PRICE_ID = "price_1T02XA2MJxJeVXhRzYogRFho"; 
 
 export default function BusinessDashboard() {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams(); // 🟢 To check for payment success
     
     const [venue, setVenue] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'manage'
+    const [promoting, setPromoting] = useState(false); // 🟢 New state
+    const [activeTab, setActiveTab] = useState('overview');
 
     // Form State
     const [formData, setFormData] = useState({
@@ -30,8 +35,7 @@ export default function BusinessDashboard() {
     useEffect(() => {
         async function fetchMyVenue() {
             if (!user) return;
-            // Find the venue owned by this user
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('locations')
                 .select('*')
                 .eq('owner_id', user.id)
@@ -49,7 +53,14 @@ export default function BusinessDashboard() {
             setLoading(false);
         }
         fetchMyVenue();
-    }, [user]);
+
+        // 🟢 Check for Payment Success via URL
+        if (searchParams.get('session_id')) {
+            toast.success("Payment Successful! Your venue is being boosted.");
+            // In a real app, you'd confirm this with a webhook, 
+            // but this gives immediate feedback.
+        }
+    }, [user, searchParams]);
 
     const handleUpdate = async (e) => {
         e.preventDefault();
@@ -75,9 +86,34 @@ export default function BusinessDashboard() {
         }
     };
 
+    // 🟢 3. THE PROMOTE FUNCTION
+    const handlePromote = async () => {
+        if (!venue) return;
+        setPromoting(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('create-checkout', {
+                body: {
+                    price_id: STRIPE_PRICE_ID,
+                    location_id: venue.id,
+                    user_id: user.id,
+                    return_url: window.location.href // Redirect back here after paying
+                }
+            });
+
+            if (error) throw error;
+            if (data?.url) {
+                window.location.href = data.url; // 🚀 Redirect to Stripe
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Could not start payment.");
+        } finally {
+            setPromoting(false);
+        }
+    };
+
     if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
 
-    // 1. STATE: NO VENUE FOUND
     if (!venue) {
         return (
             <div className="min-h-screen bg-slate-950 text-white p-6 flex flex-col items-center justify-center text-center">
@@ -91,7 +127,6 @@ export default function BusinessDashboard() {
         );
     }
 
-    // 2. STATE: DASHBOARD
     return (
         <div className="min-h-screen bg-slate-950 text-white p-6 pb-24">
             {/* Header */}
@@ -127,7 +162,6 @@ export default function BusinessDashboard() {
                 </button>
             </div>
 
-            {/* CONTENT AREA */}
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 
                 {/* TAB 1: OVERVIEW (ANALYTICS) */}
@@ -135,8 +169,13 @@ export default function BusinessDashboard() {
                     <div className="space-y-6">
                         <VenueAnalytics locationId={venue.id} />
                         
-                        {/* Promotion Teaser */}
-                        <div className="bg-gradient-to-br from-amber-900/40 to-slate-900 border border-amber-500/30 rounded-xl p-5">
+                        {/* 🟢 PROMOTION CARD */}
+                        <div className="bg-gradient-to-br from-amber-900/40 to-slate-900 border border-amber-500/30 rounded-xl p-5 relative overflow-hidden">
+                            {venue.is_promoted && (
+                                <div className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                                    ACTIVE
+                                </div>
+                            )}
                             <div className="flex items-center gap-3 mb-2">
                                 <TrendingUp className="w-5 h-5 text-amber-500" />
                                 <h3 className="font-bold text-white">Boost Traffic</h3>
@@ -144,9 +183,20 @@ export default function BusinessDashboard() {
                             <p className="text-sm text-slate-400 mb-4">
                                 Get featured on the home page map to attract more customers tonight.
                             </p>
-                            <Button className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">
-                                Promote for $29
-                            </Button>
+                            
+                            {venue.is_promoted ? (
+                                <Button disabled className="w-full bg-green-500/10 text-green-500 font-bold border border-green-500/20">
+                                    <CheckCircle className="w-4 h-4 mr-2" /> Currently Promoted
+                                </Button>
+                            ) : (
+                                <Button 
+                                    onClick={handlePromote} 
+                                    disabled={promoting}
+                                    className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400"
+                                >
+                                    {promoting ? <Loader2 className="animate-spin w-4 h-4" /> : "Promote for $29"}
+                                </Button>
+                            )}
                         </div>
                     </div>
                 )}

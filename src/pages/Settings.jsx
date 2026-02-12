@@ -123,18 +123,7 @@ export default function Settings() {
         </div>
       </div>
 
-          {/* 🔴 THE CRASH BUTTON */}
-          <Button 
-            onClick={() => { throw new Error("⚠️ Sentry Test Error! If you see this, Sentry is working."); }} 
-            variant="ghost" 
-            className="w-full justify-start gap-2 text-orange-500 hover:text-orange-400 hover:bg-orange-950/20"
-          >
-            <Bug className="w-4 h-4" /> Test Crash (Sentry)
-          </Button>
-
-          <Button onClick={handleDeleteAccount} variant="ghost" className="w-full justify-start gap-2 text-slate-300 hover:text-white hover:bg-slate-800">
-            <Trash2 className="w-3 h-3" /> Delete Account
-          </Button>
+      
         </div>
     
   );
