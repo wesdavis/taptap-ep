@@ -22,8 +22,8 @@ import AdminDashboard from './pages/AdminDashboard';
 
 const queryClient = new QueryClient();
 
-// 🟢 CONFIG: How long before auto-logout? (15 Minutes)
-const IDLE_TIMEOUT_MS = 15 * 60 * 1000; 
+// 🟢 CONFIG: How long before auto-logout? (60 Minutes)
+const IDLE_TIMEOUT_MS = 60 * 60 * 1000; 
 
 const PageNotFound = () => (
   <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
