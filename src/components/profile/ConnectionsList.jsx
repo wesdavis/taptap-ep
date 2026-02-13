@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, User } from 'lucide-react';
+import { User, ChevronRight } from 'lucide-react'; // 🟢 Swapped MessageCircle for ChevronRight
 
 export default function ConnectionsList() {
     const { user } = useAuth();
@@ -30,7 +30,7 @@ export default function ConnectionsList() {
             .order('updated_at', { ascending: false });
 
         if (data) {
-            // 🟢 DEDUPLICATION LOGIC
+            // 🟢 DEDUPLICATION LOGIC (Ensures Unique Humans)
             const uniqueMap = new Map();
 
             data.forEach(ping => {
@@ -79,12 +79,13 @@ export default function ConnectionsList() {
                             <p className="text-amber-500 text-xs">@{item.user.handle}</p>
                         </div>
                     </div>
-                    <div className="text-right">
-                        <span className="text-[10px] text-slate-500 block">
+                    <div className="text-right flex flex-col items-end">
+                        <span className="text-[10px] text-slate-500 block mb-1">
                             {new Date(item.metAt).toLocaleDateString()}
                         </span>
-                        <div className="bg-slate-800 p-2 rounded-full text-slate-400 group-hover:bg-amber-500 group-hover:text-black transition inline-flex mt-1">
-                            <MessageCircle className="w-4 h-4" />
+                        {/* 🟢 Swapped Chat Icon for "Go To Profile" Chevron */}
+                        <div className="p-1 rounded-full text-slate-600 group-hover:text-amber-500 transition">
+                            <ChevronRight className="w-5 h-5" />
                         </div>
                     </div>
                 </div>
