@@ -15,10 +15,19 @@ export default function Landing() {
                 className="fixed inset-0 z-0 pointer-events-none"
                 style={{
                     backgroundImage: `url('/el-paso-star2.jpg')`, 
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'top center',
+                    
+                    // 1. SHRINK: '100% auto' fits width exactly. Change to '80%' if you want it smaller.
+                    //    (Original was 'cover', which zooms in to fill screen)
+                    backgroundSize: '100% auto', 
+                    
+                    // 2. RAISE: 'center -50px' moves the image UP by 50 pixels.
+                    //    Change '-50px' to '-100px' to raise it higher.
+                    //    Change 'top' back to 'center' to align horizontally.
+                    backgroundPosition: 'center -50px',
+                    
                     backgroundAttachment: 'fixed',
-                    opacity: 0.5 // Slightly higher opacity for landing to make it pop
+                    backgroundRepeat: 'no-repeat', // Prevents tiling if image is small
+                    opacity: 0.5 
                 }}
             />
             
