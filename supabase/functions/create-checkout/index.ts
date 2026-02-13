@@ -1,13 +1,13 @@
-import { serve } from "std/http/server.ts"
-import Stripe from "stripe"
+import Stripe from "stripe";
 
-// 🟢 FIX: Added 'x-supabase-client-platform' to the allowed headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform',
 }
 
-serve(async (req) => {
+console.log("🚀 Create Checkout Function Started");
+
+Deno.serve(async (req) => {
   // 1. Handle CORS Preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })

@@ -239,7 +239,7 @@ const Home = () => {
         style={{
           // 🟢 REPLACE 'el-paso-star.jpg' with your actual file name in public folder
           backgroundImage: `url('/el-paso-star.jpg')`, 
-          backgroundSize: 'cover',
+          backgroundSize: '100% auto',
           backgroundPosition: 'center',
           backgroundAttachment: 'fixed', // This makes it static while you scroll
           opacity: 0.4 // Adjust visibility
