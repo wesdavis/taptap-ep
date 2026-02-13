@@ -131,4 +131,71 @@ export default function Landing() {
                                     <div className="absolute inset-0 bg-gradient-to-b from-indigo-900/20 to-slate-950/80"></div>
                                     
                                     {/* Floating Avatars */}
-                                    <motion.div
+                                    <motion.div 
+                                        animate={{ y: [0, -10, 0] }} 
+                                        transition={{ repeat: Infinity, duration: 4 }}
+                                        className="absolute top-20 left-10 w-12 h-12 rounded-full border-2 border-amber-500 bg-slate-800 z-10 overflow-hidden shadow-lg shadow-amber-500/20"
+                                    >
+                                        <img src="https://i.pravatar.cc/100?img=32" alt="User" />
+                                    </motion.div>
+                                    <motion.div 
+                                        animate={{ y: [0, 15, 0] }} 
+                                        transition={{ repeat: Infinity, duration: 5 }}
+                                        className="absolute top-10 right-16 w-10 h-10 rounded-full border-2 border-green-500 bg-slate-800 z-10 overflow-hidden shadow-lg shadow-green-500/20"
+                                    >
+                                        <img src="https://i.pravatar.cc/100?img=12" alt="User" />
+                                    </motion.div>
+
+                                    <h3 className="text-2xl font-bold text-white relative z-20 drop-shadow-lg">Nearby Spots</h3>
+                                </div>
+
+                                {/* List */}
+                                <div className="flex-1 p-4 space-y-3">
+                                    {[
+                                        { name: "Coffee Box", type: "CAFE", dist: "0.1 mi", active: true },
+                                        { name: "Union Draft House", type: "BAR", dist: "0.3 mi", active: false },
+                                        { name: "San Jacinto Plaza", type: "PARK", dist: "0.5 mi", active: false },
+                                    ].map((item, i) => (
+                                        <div key={i} className={`p-3 rounded-xl border flex items-center justify-between backdrop-blur-md ${item.active ? 'bg-amber-500/20 border-amber-500/50 shadow-lg shadow-amber-500/10' : 'bg-slate-900/60 border-slate-800/60'}`}>
+                                            <div>
+                                                <div className="font-bold text-white text-sm">{item.name}</div>
+                                                <div className="text-xs text-slate-400 flex gap-2 mt-1">
+                                                    <span className={item.active ? "text-amber-400 font-bold" : "text-slate-500"}>{item.type}</span>
+                                                    <span>• {item.dist}</span>
+                                                </div>
+                                            </div>
+                                            {item.active && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </motion.div>
+                        
+                        {/* Glow Behind Phone */}
+                        <div className="absolute inset-0 bg-amber-500/10 blur-[100px] -z-10 rounded-full pointer-events-none"></div>
+                    </div>
+
+                </main>
+
+                {/* Feature Grid (Bottom) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 mb-12">
+                    {[
+                        { icon: MapPin, title: "Proximity First", desc: "You must be within 0.5 miles to check in. No fakes." },
+                        { icon: Zap, title: "Tap to Connect", desc: "Women have the power to tap men. Men check in and set the vibe." },
+                        { icon: Coffee, title: "Real Venues", desc: "Curated spots in your city. Bars, cafes, and parks." }
+                    ].map((feature, i) => (
+                        <div key={i} className="p-6 rounded-2xl bg-slate-900/40 backdrop-blur-md border border-white/10 hover:bg-white/5 transition-colors group cursor-default shadow-lg">
+                            <feature.icon className="w-8 h-8 text-slate-400 group-hover:text-amber-500 transition-colors mb-4" />
+                            <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
+                            <p className="text-slate-400 text-sm leading-relaxed">{feature.desc}</p>
+                        </div>
+                    ))}
+                </div>
+
+                <footer className="py-8 border-t border-slate-800/50 text-center text-slate-500 text-sm backdrop-blur-sm">
+                    © {new Date().getFullYear()} TapTap. Built in El Paso.
+                </footer>
+            </div>
+        </div>
+    );
+}
