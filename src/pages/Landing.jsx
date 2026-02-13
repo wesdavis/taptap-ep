@@ -16,7 +16,7 @@ export default function Landing() {
                 style={{
                     backgroundImage: `url('/el-paso-star2.jpg')`, 
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center',
+                    backgroundPosition: 'top center',
                     backgroundAttachment: 'fixed',
                     opacity: 0.5 // Slightly higher opacity for landing to make it pop
                 }}
