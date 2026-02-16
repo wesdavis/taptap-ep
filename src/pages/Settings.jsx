@@ -3,7 +3,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase'; 
 import { Button } from "@/components/ui/button";
-import { LogOut, ChevronLeft, User, Shield, Trash2, Store, ChevronRight, Bug, Mail } from 'lucide-react';
+import { LogOut, ChevronLeft, User, Shield, Trash2, Store, ChevronRight, Bug, Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -90,6 +90,11 @@ export default function Settings() {
           <div className="space-y-1">
             <Button variant="ghost" className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-800 px-2" onClick={() => navigate('/profile-setup')}>Edit Profile</Button>
             <Button variant="ghost" className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-800 px-2" onClick={() => navigate('/achievements')}>My Achievements</Button>
+            
+            {/* 🟢 NEW BUTTON: CHANGE PASSWORD */}
+            <Button variant="ghost" className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-800 px-2" onClick={() => navigate('/update-password')}>
+                Change Password
+            </Button>
           </div>
         </div>
 
@@ -122,9 +127,6 @@ export default function Settings() {
           </Button>
         </div>
       </div>
-
-      
-        </div>
-    
+    </div>
   );
 }
