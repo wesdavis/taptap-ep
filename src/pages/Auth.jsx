@@ -75,7 +75,7 @@ export default function Auth() {
                 {/* Glow behind the logo */}
                 <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-90" />
                 <img 
-                    src="/logo-desert-big.png" 
+                    src="/logo-desert-bigger.png" 
                     alt="TapTap" 
                     className="relative w-full h-full object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)]"
                 />
