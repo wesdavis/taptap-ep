@@ -71,7 +71,7 @@ export default function Auth() {
           <div className="text-center mb-8">
             
             {/* 🟢 NEW LOGO HERE */}
-            <div className="relative w-32 h-32 mx-auto mb-6">
+            <div className="relative w-48 h-48 mx-auto mb-6">
                 {/* Glow behind the logo */}
                 <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-90" />
                 <img 
