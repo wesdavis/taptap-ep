@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Zap, Loader2, ArrowLeft, Mail, Lock } from 'lucide-react';
+import { Loader2, ArrowLeft, Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Auth() {
@@ -15,10 +15,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
 
-  // 🟢 1. THE "LAZY" PASSWORD POLICY
-  const isValidPassword = (pwd) => {
-    return pwd.length >= 6; // That's it. Simple.
-  };
+  const isValidPassword = (pwd) => pwd.length >= 6;
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -26,19 +23,15 @@ export default function Auth() {
 
     try {
       if (view === 'forgot_password') {
-        // 🟢 HANDLE PASSWORD RESET
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + '/update-password', // We will build this page next
+          redirectTo: window.location.origin + '/update-password',
         });
         if (error) throw error;
         toast.success("Check your email for the reset link!");
         setView('sign_in');
       } 
       else if (view === 'sign_up') {
-        // CHECK POLICY
-        if (!isValidPassword(password)) {
-          throw new Error("Password is too short (min 6 characters).");
-        }
+        if (!isValidPassword(password)) throw new Error("Password is too short (min 6 characters).");
 
         const { error } = await supabase.auth.signUp({
           email,
@@ -46,17 +39,14 @@ export default function Auth() {
           options: {
             data: {
               full_name: fullName,
-              display_name: fullName.split(' ')[0], // Simple default handle
+              display_name: fullName.split(' ')[0], 
             },
           },
         });
         if (error) throw error;
         toast.success("Account created! You can now log in.");
-        // Auto-login behavior varies by config, usually requires email confirmation or auto-signs in.
-        // If email confirm is off, they are logged in.
       } 
       else {
-        // SIGN IN
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -74,13 +64,23 @@ export default function Auth() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
        {/* Background Glow */}
-       <div className="absolute top-[-10%] right-[-5%] w-[300px] h-[300px] bg-amber-500/20 rounded-full blur-[100px]" />
+       <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-amber-600/10 rounded-full blur-[120px] pointer-events-none" />
+       <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-amber-900/10 rounded-full blur-[100px] pointer-events-none" />
        
        <div className="w-full max-w-md relative z-10">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-900/20 mx-auto mb-4">
-               <Zap className="text-black w-8 h-8 fill-black" />
+            
+            {/* 🟢 NEW LOGO HERE */}
+            <div className="relative w-32 h-32 mx-auto mb-6">
+                {/* Glow behind the logo */}
+                <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-90" />
+                <img 
+                    src="/logo-desert-big.png" 
+                    alt="TapTap" 
+                    className="relative w-full h-full object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                />
             </div>
+
             <h1 className="text-3xl font-black text-white tracking-tight">
               {view === 'sign_in' && "Welcome Back"}
               {view === 'sign_up' && "Join the Action"}
@@ -134,7 +134,7 @@ export default function Auth() {
               </div>
             )}
 
-            <Button disabled={loading} className="w-full h-12 bg-white text-black font-bold hover:bg-slate-200 text-base mt-2">
+            <Button disabled={loading} className="w-full h-12 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-base mt-2 shadow-lg shadow-amber-900/20">
               {loading ? <Loader2 className="animate-spin" /> : 
                 (view === 'sign_in' ? 'Log In' : view === 'sign_up' ? 'Create Account' : 'Send Reset Link')
               }
