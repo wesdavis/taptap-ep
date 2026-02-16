@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Zap, Loader2, User, Radio, EyeOff } from 'lucide-react'; 
+import { Zap, Loader2, User, Radio, EyeOff, Shield } from 'lucide-react'; 
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -23,8 +23,6 @@ export default function UserGrid({ locationId }) {
     
     // Data State
     const [users, setUsers] = useState([]);
-    
-    // 🟢 FIX 1: Default to NULL (Don't assume 'Everyone')
     const [myProfile, setMyProfile] = useState({ gender: null, interested_in: null });
     
     const [amIHere, setAmIHere] = useState(false); 
@@ -69,7 +67,6 @@ export default function UserGrid({ locationId }) {
             .eq('id', user.id)
             .single();
         
-        // 🟢 DEBUG: Log what the DB actually sends back
         console.log("MY PROFILE LOADED:", data);
         if (data) setMyProfile(data);
     }
@@ -111,19 +108,24 @@ export default function UserGrid({ locationId }) {
         } catch (e) { console.log("Grid fetch error:", e); } finally { setLoading(false); }
     }
 
-    // 🟢 FIX 2: STRICT MATCHING LOGIC
-    const isMatch = (targetGender) => {
-        const interest = myProfile.interested_in; // "Male" or "Female"
-        
-        // Safety: If I haven't set a preference, I see NO ONE.
-        if (!interest) return false; 
-        
-        const theirGender = targetGender || "Unknown";
+    // 🟢 FIX: STRICT GENDER RULES
+    const canTapUser = (targetGender) => {
+        // 1. Get my gender safely (lowercase)
+        const myGender = (myProfile?.gender || '').toLowerCase();
+        const theirGender = (targetGender || '').toLowerCase();
 
-        // Logic
-        if (interest === "Everyone") return true; // (Legacy support, though we removed it from UI)
-        if (interest === "Male" && theirGender === "Male") return true;
-        if (interest === "Female" && theirGender === "Female") return true;
+        // 2. RULE: Men CANNOT tap Women
+        if (myGender === 'male' && theirGender === 'female') {
+            return false;
+        }
+
+        // 3. RULE: Must match my "Interested In" preference
+        const interest = myProfile.interested_in; 
+        if (!interest) return false; 
+
+        if (interest === "Everyone") return true; 
+        if (interest === "Male" && theirGender === 'male') return true;
+        if (interest === "Female" && theirGender === 'female') return true;
         
         return false;
     };
@@ -225,8 +227,8 @@ export default function UserGrid({ locationId }) {
                     const isTheTarget = activeTapId === item.user_id;
                     const isLocked = activeTapId !== null && !isTheTarget;
                     
-                    // 🟢 STRICT CHECK
-                    const canITap = isMatch(profile?.gender);
+                    // 🟢 USE STRICT CHECK
+                    const canITap = canTapUser(profile?.gender);
 
                     return (
                         <div key={item.user_id} className={`flex flex-col items-center group relative ${isLocked ? 'opacity-30 grayscale pointer-events-none' : ''}`}>
@@ -242,14 +244,14 @@ export default function UserGrid({ locationId }) {
                                     <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 border-2 border-slate-900 rounded-full ${isTheTarget ? 'bg-amber-500 animate-ping' : 'bg-green-500'}`}></div>
                                 </div>
                                 
-                                {/* Only show button if NOT me AND is a match */}
-                                {!isMe && canITap && (
+                                {/* BUTTON LOGIC */}
+                                {!isMe && (
                                     <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10">
                                         {isTheTarget ? (
                                             <div className="bg-slate-900 text-amber-500 text-[9px] font-black px-2 py-1 rounded-full border border-amber-500/50 flex items-center gap-1 shadow-lg whitespace-nowrap">
                                                 <Loader2 className="w-3 h-3 animate-spin" /> WAITING
                                             </div>
-                                        ) : isLocked ? null : (
+                                        ) : isLocked ? null : canITap ? (
                                             <Button
                                                 size="sm"
                                                 className="h-6 px-2 rounded-full text-[10px] font-bold shadow-lg bg-green-500 hover:bg-green-600 text-black flex items-center gap-1"
@@ -257,6 +259,14 @@ export default function UserGrid({ locationId }) {
                                             >
                                                 <Zap className="w-3 h-3 fill-black" /> TAP
                                             </Button>
+                                        ) : (
+                                            // Optional: Show "Locked" shield for men looking at women
+                                            // Only show this if preferences match but gender blocks it (to avoid clutter)
+                                            (myProfile?.gender === 'Male' && profile?.gender === 'Female') && (
+                                                <div className="bg-slate-800/80 rounded-full p-1 border border-slate-700">
+                                                     <Shield className="w-3 h-3 text-slate-500" />
+                                                </div>
+                                            )
                                         )}
                                     </div>
                                 )}

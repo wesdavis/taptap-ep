@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea"; 
-import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight, User, ShieldBan, Flag } from 'lucide-react';
+import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight, User, ShieldBan, Flag, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -38,7 +38,8 @@ export default function PublicProfile() {
     const [status, setStatus] = useState(null);
     
     // Match Logic State
-    const [canConnect, setCanConnect] = useState(false);
+    const [canConnect, setCanConnect] = useState(false); // Means "Location & Preferences Match"
+    const [isGenderLocked, setIsGenderLocked] = useState(false); // Means "Male looking at Female"
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Location State
@@ -110,16 +111,24 @@ export default function PublicProfile() {
             const matchLoc = myCheckin && targetCheckin && (myCheckin.location_id === targetCheckin.location_id);
             setIsSameLocation(matchLoc);
 
-            // 4. MATCH LOGIC (Strict Binary)
+            // 4. 🟢 FIXED MATCH LOGIC (Bulletproof)
             if (myProfile && profileData && !isMe) {
+                const myGender = (myProfile.gender || '').toLowerCase();
+                const theirGender = (profileData.gender || '').toLowerCase();
                 const myInterest = myProfile.interested_in; 
-                const theirGender = profileData.gender; 
 
+                // A. Check Gender Lock (Men cannot tap Women)
+                const genderLock = (myGender === 'male' && theirGender === 'female');
+                setIsGenderLocked(genderLock);
+
+                // B. Check Preference Match
                 let allowed = false;
-                if (myInterest === 'Male' && theirGender === 'Male') allowed = true;
-                if (myInterest === 'Female' && theirGender === 'Female') allowed = true;
+                if (myInterest === 'Everyone') allowed = true;
+                if (myInterest === 'Male' && theirGender === 'male') allowed = true;
+                if (myInterest === 'Female' && theirGender === 'female') allowed = true;
                 
-                // Only allow connection if matched AND at same location
+                // Show the bar if: Preferences Match AND Same Location
+                // (We will handle the Disable state in the UI via isGenderLocked)
                 setCanConnect(allowed && matchLoc);
             }
 
@@ -131,7 +140,7 @@ export default function PublicProfile() {
                     .eq('from_user_id', user.id)
                     .eq('to_user_id', userId)
                     .eq('location_id', myCheckin.location_id)
-                    .gt('created_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()) 
+                    .eq('created_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()) 
                     .maybeSingle();
 
                 if (ping) setStatus(ping.status || 'pending');
@@ -353,18 +362,36 @@ export default function PublicProfile() {
                 {/* FLOATING ACTION BAR */}
                 {canConnect && status === null && (
                     <div className="fixed bottom-6 left-4 right-4 z-40 animate-in slide-in-from-bottom-6 duration-500">
-                        <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 p-2 rounded-2xl shadow-2xl flex items-center gap-3 pr-2">
+                        <div className={`backdrop-blur-xl border p-2 rounded-2xl shadow-2xl flex items-center gap-3 pr-2 ${isGenderLocked ? 'bg-slate-900/90 border-slate-700' : 'bg-slate-900/90 border-white/10'}`}>
+                            
                             <div className="flex-1 pl-3">
-                                <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">Interested?</div>
-                                <div className="text-sm font-bold text-white">Send a signal</div>
+                                <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">
+                                    {isGenderLocked ? "Locked" : "Interested?"}
+                                </div>
+                                <div className={`text-sm font-bold ${isGenderLocked ? 'text-slate-500' : 'text-white'}`}>
+                                    {isGenderLocked ? "Women tap first." : "Send a signal"}
+                                </div>
                             </div>
-                            <Button 
-                                onClick={handleUniversalTap} 
-                                disabled={isSubmitting}
-                                className="h-12 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
-                            >
-                                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <div className="flex items-center gap-2"><Zap className="w-5 h-5 fill-black" /> TAP</div>}
-                            </Button>
+
+                            {isGenderLocked ? (
+                                // 🟢 LOCKED STATE BUTTON
+                                <Button 
+                                    disabled
+                                    className="h-12 px-4 bg-slate-800 text-slate-500 font-bold rounded-xl border border-slate-700"
+                                >
+                                    <Shield className="w-5 h-5 mr-2" />
+                                    No Tap
+                                </Button>
+                            ) : (
+                                // 🟢 ACTIVE STATE BUTTON
+                                <Button 
+                                    onClick={handleUniversalTap} 
+                                    disabled={isSubmitting}
+                                    className="h-12 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                                >
+                                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <div className="flex items-center gap-2"><Zap className="w-5 h-5 fill-black" /> TAP</div>}
+                                </Button>
+                            )}
                         </div>
                     </div>
                 )}
