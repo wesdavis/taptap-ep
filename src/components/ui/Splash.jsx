@@ -22,7 +22,7 @@ export default function Splash() {
             
             {/* THE NEW LOGO */}
             <img 
-                src="/logo-desert.png" 
+                src="/logo-desert-big.png" 
                 alt="TapTap Logo" 
                 className="relative w-48 h-48 object-contain drop-shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in duration-1000" 
             />
