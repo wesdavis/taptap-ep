@@ -17,7 +17,8 @@ import Achievements from './pages/Achievements';
 import Settings from './pages/Settings';
 import BusinessDashboard from './pages/BusinessDashboard';
 import { supabase } from '@/lib/supabase';
-import AdminDashboard from './pages/AdminDashboard'; 
+import AdminDashboard from './pages/AdminDashboard';
+import UpdatePassword from '@/pages/UpdatePassword'; 
 
 
 const queryClient = new QueryClient();
@@ -143,6 +144,9 @@ const AuthenticatedApp = () => {
       <Route path="/settings" element={!user ? <Navigate to="/landing" replace /> : <Settings />} />
       <Route path="/business" element={!user ? <Navigate to="/landing" replace /> : <BusinessDashboard />} />
       <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/landing" />} />
+      <Route path="/auth" element={<Auth />} />
+      <Route path="/update-password" element={<UpdatePassword />} /> {/* 🟢 NEW ROUTE */}
+      <Route path="/" element={<Home />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

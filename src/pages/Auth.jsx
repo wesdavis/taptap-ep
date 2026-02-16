@@ -1,58 +1,68 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2, Mail, Chrome, ArrowRight, Sparkles } from 'lucide-react';
+import { Zap, Loader2, ArrowLeft, Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Auth() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState('sign_in'); // 'sign_in', 'sign_up', 'forgot_password'
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const navigate = useNavigate();
+  const [fullName, setFullName] = useState('');
 
-  const handleGoogleLogin = async () => {
-    try {
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo: window.location.origin }
-        });
-        if (error) throw error;
-    } catch (error) {
-        toast.error("Google Login failed");
-        console.error(error);
-    }
+  // 🟢 1. THE "LAZY" PASSWORD POLICY
+  const isValidPassword = (pwd) => {
+    return pwd.length >= 6; // That's it. Simple.
   };
 
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
-      if (isSignUp) {
-        // SIGN UP FLOW
-        const { error } = await supabase.auth.signUp({ 
-            email, 
-            password,
-            options: {
-                data: {
-                    full_name: email.split('@')[0],
-                    avatar_url: `https://ui-avatars.com/api/?name=${email}&background=random`
-                }
-            }
+      if (view === 'forgot_password') {
+        // 🟢 HANDLE PASSWORD RESET
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/update-password', // We will build this page next
         });
         if (error) throw error;
-        toast.success("Account created! Let's set up your profile.");
-        // 🟢 FIX #21: Route to Setup
-        navigate('/profile-setup'); 
-      } else {
-        // SIGN IN FLOW
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        toast.success("Check your email for the reset link!");
+        setView('sign_in');
+      } 
+      else if (view === 'sign_up') {
+        // CHECK POLICY
+        if (!isValidPassword(password)) {
+          throw new Error("Password is too short (min 6 characters).");
+        }
+
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              display_name: fullName.split(' ')[0], // Simple default handle
+            },
+          },
+        });
         if (error) throw error;
-        navigate('/'); // Route to Home
+        toast.success("Account created! You can now log in.");
+        // Auto-login behavior varies by config, usually requires email confirmation or auto-signs in.
+        // If email confirm is off, they are logged in.
+      } 
+      else {
+        // SIGN IN
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        navigate('/');
       }
     } catch (error) {
       toast.error(error.message);
@@ -63,75 +73,100 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      
-      <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="w-full max-w-md space-y-8 relative z-10">
-        
-        <div className="text-center space-y-2">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-xl shadow-amber-500/20 mb-4 animate-in zoom-in duration-500">
-                <Sparkles className="w-8 h-8 text-black fill-white" />
+       {/* Background Glow */}
+       <div className="absolute top-[-10%] right-[-5%] w-[300px] h-[300px] bg-amber-500/20 rounded-full blur-[100px]" />
+       
+       <div className="w-full max-w-md relative z-10">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-900/20 mx-auto mb-4">
+               <Zap className="text-black w-8 h-8 fill-black" />
             </div>
-            <h1 className="text-4xl font-black text-white tracking-tight">Tap Tap</h1>
-            <p className="text-slate-400">The social compass for your night out.</p>
-        </div>
+            <h1 className="text-3xl font-black text-white tracking-tight">
+              {view === 'sign_in' && "Welcome Back"}
+              {view === 'sign_up' && "Join the Action"}
+              {view === 'forgot_password' && "Reset Password"}
+            </h1>
+            <p className="text-slate-400 mt-2">
+              {view === 'forgot_password' 
+                ? "Enter your email and we'll send you a link." 
+                : "The only social network for the real world."}
+            </p>
+          </div>
 
-        <div className="space-y-3">
-            <Button onClick={handleGoogleLogin} variant="outline" className="w-full h-12 bg-white text-black font-bold hover:bg-slate-100 border-0 flex items-center gap-3 text-base shadow-lg transition-transform active:scale-95">
-                <Chrome className="w-5 h-5 text-blue-600" />
-                Continue with Google
-            </Button>
+          <form onSubmit={handleAuth} className="space-y-4">
             
-            <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-800"></span></div>
-                <div className="relative flex justify-center text-xs uppercase"><span className="bg-slate-950 px-2 text-slate-500 font-bold">Or use email</span></div>
-            </div>
-        </div>
-
-        <form onSubmit={handleAuth} className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="space-y-2">
-            <Label className="text-slate-300 ml-1">Email</Label>
-            <div className="relative">
-                <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+            {view === 'sign_up' && (
+              <div className="space-y-1">
                 <Input 
-                    type="email" 
-                    placeholder="hello@example.com" 
-                    required 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    // 🟢 FIX #25: Forced text-white and lighter placeholder
-                    className="pl-10 h-12 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 focus:border-amber-500 focus:ring-amber-500/20 transition-all"
+                  type="text" 
+                  placeholder="Full Name" 
+                  className="bg-slate-900/50 border-slate-800 h-12 text-white"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
                 />
+              </div>
+            )}
+
+            <div className="space-y-1 relative">
+              <Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
+              <Input 
+                type="email" 
+                placeholder="Email Address" 
+                className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
+
+            {view !== 'forgot_password' && (
+              <div className="space-y-1 relative">
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
+                <Input 
+                  type="password" 
+                  placeholder="Password (min 6 chars)" 
+                  className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            <Button disabled={loading} className="w-full h-12 bg-white text-black font-bold hover:bg-slate-200 text-base mt-2">
+              {loading ? <Loader2 className="animate-spin" /> : 
+                (view === 'sign_in' ? 'Log In' : view === 'sign_up' ? 'Create Account' : 'Send Reset Link')
+              }
+            </Button>
+          </form>
+
+          {/* TOGGLES */}
+          <div className="mt-6 text-center space-y-3">
+             {view === 'sign_in' && (
+               <>
+                 <p className="text-slate-500 text-sm">
+                   Need an account? <button onClick={() => setView('sign_up')} className="text-amber-500 font-bold hover:underline">Sign Up</button>
+                 </p>
+                 <button onClick={() => setView('forgot_password')} className="text-xs text-slate-500 hover:text-white transition">
+                   Forgot Password?
+                 </button>
+               </>
+             )}
+
+             {view === 'sign_up' && (
+               <p className="text-slate-500 text-sm">
+                 Already have one? <button onClick={() => setView('sign_in')} className="text-amber-500 font-bold hover:underline">Log In</button>
+               </p>
+             )}
+
+             {view === 'forgot_password' && (
+               <button onClick={() => setView('sign_in')} className="text-slate-400 text-sm hover:text-white flex items-center gap-2 mx-auto">
+                 <ArrowLeft className="w-4 h-4" /> Back to Login
+               </button>
+             )}
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-slate-300 ml-1">Password</Label>
-            <Input 
-                type="password" 
-                placeholder="••••••••" 
-                required 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                // 🟢 FIX #25: Forced text-white
-                className="h-12 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 focus:border-amber-500 focus:ring-amber-500/20 transition-all"
-            />
-          </div>
-
-          <Button type="submit" disabled={loading} className="w-full h-12 bg-slate-800 hover:bg-slate-700 text-white font-bold border border-slate-700 shadow-lg">
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isSignUp ? 'Create Account' : 'Sign In')}
-            {!loading && <ArrowRight className="ml-2 w-4 h-4" />}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-slate-500">
-          {isSignUp ? "Already have an account?" : "Don't have an account?"}
-          <button onClick={() => setIsSignUp(!isSignUp)} className="ml-2 text-amber-500 font-bold hover:underline">
-            {isSignUp ? 'Sign In' : 'Sign Up'}
-          </button>
-        </p>
-      </div>
+       </div>
     </div>
   );
 }
