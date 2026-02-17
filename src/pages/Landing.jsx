@@ -19,14 +19,14 @@ export default function Landing() {
                     backgroundPosition: 'center -50px',
                     backgroundAttachment: 'fixed',
                     backgroundRepeat: 'no-repeat',
-                    opacity: 0.4 // Slightly lowered opacity to let the colors pop more
+                    opacity: 0.4 
                 }}
             />
             
             {/* 🟢 BACKGROUND: VIGNETTE */}
             <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(2,6,23,0.3)_0%,#020617_100%)]" />
 
-            {/* 🟢 NEW: SUNSET ATMOSPHERE GLOWS (Rose + Amber) */}
+            {/* 🟢 BACKGROUND: ATMOSPHERE GLOWS */}
             <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-rose-600/20 rounded-full blur-[120px] pointer-events-none z-0 mix-blend-screen" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-orange-600/10 rounded-full blur-[100px] pointer-events-none z-0" />
 
@@ -34,17 +34,17 @@ export default function Landing() {
                 
                 {/* Header */}
                 <header className="flex justify-between items-center mb-12 lg:mb-20 animate-in fade-in slide-in-from-top-4 duration-700">
-                    <div className="flex items-center gap-3">
-                        <div className="relative w-48 h-48 group">
-                            {/* Logo Glow */}
-                            <div className="absolute inset-0 bg-orange-500/20 blur-lg rounded-full group-hover:bg-orange-500/30 transition-all" />
+                    <div className="flex items-center gap-4">
+                        {/* 🟢 FIXED: Logo is now BIG (w-24 / 96px) so it's clear on mobile */}
+                        <div className="relative w-24 h-24 group">
+                            <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full group-hover:bg-orange-500/30 transition-all" />
                             <img 
-                                src="/logo-desert-bigger.png" 
+                                src="/logo-desert.png" 
                                 alt="TapTap" 
-                                className="relative w-full h-full object-contain drop-shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
+                                className="relative w-full h-full object-contain drop-shadow-[0_0_15px_rgba(249,115,22,0.6)]" 
                             />
                         </div>
-                        <span className="text-2xl font-black tracking-tight text-white drop-shadow-md">
+                        <span className="text-3xl font-black tracking-tight text-white drop-shadow-md hidden sm:block">
                             TapTap
                         </span>
                     </div>
@@ -75,17 +75,9 @@ export default function Landing() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6 }}
                         >
-                            {/* Hero Logo */}
-                            <div className="hidden lg:block relative w-8 h-8 mb-6 -ml-4">
-                                <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full scale-110" />
-                                <img 
-                                    src="/logo-desert.png" 
-                                    className="relative w-full h-full object-contain" 
-                                    alt="TapTap Logo" 
-                                />
-                            </div>
+                            {/* 🟢 REMOVED: The middle logo is gone. */}
 
-                            {/* 🟢 BADGE: Switched to TEAL (Cactus/Agave color) for contrast */}
+                            {/* Badge */}
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/60 border border-teal-500/30 backdrop-blur-md mb-8 shadow-lg">
                                 <span className="relative flex h-2.5 w-2.5">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
@@ -94,7 +86,7 @@ export default function Landing() {
                                 <span className="text-xs font-bold text-teal-400 uppercase tracking-wider">Live in El Paso</span>
                             </div>
 
-                            {/* 🟢 HEADLINE: 3-Color Gradient (Amber -> Orange -> Rose) */}
+                            {/* Headline */}
                             <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight leading-[1.1] drop-shadow-xl">
                                 No More Swiping <br />
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 drop-shadow-sm">
@@ -108,7 +100,6 @@ export default function Landing() {
                             </p>
 
                             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                                {/* 🟢 BUTTON: Gradient Background */}
                                 <Button 
                                     size="lg"
                                     onClick={() => navigate('/auth')} 
