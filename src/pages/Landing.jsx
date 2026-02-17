@@ -35,11 +35,11 @@ export default function Landing() {
                 {/* Header */}
                 <header className="flex justify-between items-center mb-12 lg:mb-20 animate-in fade-in slide-in-from-top-4 duration-700">
                     <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-12 group">
+                        <div className="relative w-48 h-48 group">
                             {/* Logo Glow */}
                             <div className="absolute inset-0 bg-orange-500/20 blur-lg rounded-full group-hover:bg-orange-500/30 transition-all" />
                             <img 
-                                src="/logo-desert.png" 
+                                src="/logo-desert-bigger.png" 
                                 alt="TapTap" 
                                 className="relative w-full h-full object-contain drop-shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
                             />
@@ -76,10 +76,10 @@ export default function Landing() {
                             transition={{ duration: 0.6 }}
                         >
                             {/* Hero Logo */}
-                            <div className="hidden lg:block relative w-32 h-32 mb-6 -ml-4">
+                            <div className="hidden lg:block relative w-8 h-8 mb-6 -ml-4">
                                 <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full scale-110" />
                                 <img 
-                                    src="/logo-desert-bigger.png" 
+                                    src="/logo-desert.png" 
                                     className="relative w-full h-full object-contain" 
                                     alt="TapTap Logo" 
                                 />
@@ -210,7 +210,7 @@ export default function Landing() {
                     ].map((feature, i) => (
                         <div key={i} className="p-6 rounded-2xl bg-slate-900/60 backdrop-blur-md border border-white/10 hover:bg-white/5 transition-colors group cursor-default shadow-lg">
                             {feature.customIcon ? (
-                                <img src="/logo-desert.png" className="w-48 h-48 object-contain mb-4 drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]" alt="Tap" />
+                                <img src="/logo-desert.png" className="w-8 h-8 object-contain mb-4 drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]" alt="Tap" />
                             ) : (
                                 <feature.icon className="w-8 h-8 text-slate-400 group-hover:text-orange-500 transition-colors mb-4" />
                             )}
