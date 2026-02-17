@@ -103,7 +103,7 @@ export default function Landing() {
                             </h1>
 
                             <p className="text-lg md:text-xl text-slate-300 mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed drop-shadow-md font-medium">
-                                The first social network in El Paso that only works when you leave the house.
+                                The first social network that only works when you leave the house.
                                 Check in to venues, see who's actually there, and make connections in the moment. 
                             </p>
 
@@ -128,7 +128,18 @@ export default function Landing() {
                             </div>
                         </motion.div>
 
-                        
+                        {/* Social Proof */}
+                        <div className="mt-12 flex items-center justify-center lg:justify-start gap-4 text-sm text-slate-400">
+                            <div className="flex -space-x-3">
+                                {[1,2,3,4].map(i => (
+                                    <div key={i} className="w-10 h-10 rounded-full border-2 border-slate-900 bg-slate-800 overflow-hidden shadow-lg">
+                                        <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" />
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="drop-shadow-md">Join <strong className="text-white">500+ locals</strong> exploring today.</p>
+                        </div>
+                    </div>
 
                     {/* Right: Phone Graphic */}
                     <div className="flex-1 w-full max-w-md relative hidden lg:block">
