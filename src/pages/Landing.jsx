@@ -34,20 +34,29 @@ export default function Landing() {
                 
                 {/* Header */}
                 <header className="flex justify-between items-center mb-12 lg:mb-20 animate-in fade-in slide-in-from-top-4 duration-700">
-                    <div className="flex items-center gap-4">
-                        {/* 🟢 FIXED: Logo is now BIG (w-24 / 96px) so it's clear on mobile */}
-                        <div className="relative w-24 h-24 group">
-                            <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full group-hover:bg-orange-500/30 transition-all" />
+                    <div className="flex items-center"> 
+                        {/* 🟢 FIXED: "COMPENSATION MODE"
+                            1. w-40 h-40: We make the box HUGE (160px) to compensate for the empty space in the PNG.
+                            2. -ml-8: We pull it left with negative margin so it doesn't push the page content.
+                            3. scale-125: We zoom the image in by 25% to fill the whitespace.
+                        */}
+                        <div className="relative w-40 h-40 -ml-8 -my-10 group">
+                            <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full group-hover:bg-orange-500/30 transition-all scale-75" />
                             <img 
                                 src="/logo-desert.png" 
                                 alt="TapTap" 
-                                className="relative w-full h-full object-contain drop-shadow-[0_0_15px_rgba(249,115,22,0.6)]" 
+                                className="relative w-full h-full object-contain drop-shadow-[0_0_15px_rgba(249,115,22,0.6)] scale-125" 
                             />
                         </div>
-                        <span className="text-3xl font-black tracking-tight text-white drop-shadow-md hidden sm:block">
+                        
+                        {/* 🟢 Adjusted margin-left to pull the text closer to the logo 
+                           since the logo has so much transparent space on its right side.
+                        */}
+                        <span className="text-3xl font-black tracking-tight text-white drop-shadow-md hidden sm:block -ml-6">
                             TapTap
                         </span>
                     </div>
+                    
                     <div className="flex gap-4">
                         <Button 
                             variant="ghost" 
@@ -75,7 +84,6 @@ export default function Landing() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6 }}
                         >
-                            {/* 🟢 REMOVED: The middle logo is gone. */}
 
                             {/* Badge */}
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/60 border border-teal-500/30 backdrop-blur-md mb-8 shadow-lg">
