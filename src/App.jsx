@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'; 
+import { useEffect, useRef, useState } from 'react'; 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/AuthContext';
@@ -7,6 +7,7 @@ import OneSignal from 'react-onesignal';
 
 // Components & Pages
 import GlobalNotificationLayer from './components/GlobalNotificationLayer'; 
+import Splash from './components/ui/Splash'; // 🟢 NEW IMPORT
 import Home from './pages/Home';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
@@ -34,9 +35,19 @@ const PageNotFound = () => (
 
 const AuthenticatedApp = () => {
   const { user, loading, profileMissing, logout } = useAuth();
+  const [splashDone, setSplashDone] = useState(false); // 🟢 STATE FOR SPLASH DELAY
   const timerRef = useRef(null);
 
-  // 🟢 1. GHOSTBUSTER IDLE TIMER
+  // 🟢 1. SPLASH SCREEN TIMER
+  // Forces the splash screen to stay visible for at least 2.5 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSplashDone(true);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 🟢 2. GHOSTBUSTER IDLE TIMER
   useEffect(() => {
     if (!user) return;
 
@@ -78,12 +89,16 @@ const AuthenticatedApp = () => {
   }, [user, logout]);
 
 
-  // 🟢 2. ONESIGNAL INIT LOGIC (FIXED)
+  // 🟢 3. ONESIGNAL INIT LOGIC
   useEffect(() => {
     // 🛡️ Guard: Only run if user exists AND OneSignal hasn't started yet
     if (user && !window.OneSignalInitialized) {
       window.OneSignalInitialized = true; // 🚩 Set flag immediately
 
+      // Use window.OneSignal to access the loaded library
+      window.OneSignal = window.OneSignal || [];
+      
+      // Initialize via the global object if React wrapper fails or creates dupes
       OneSignal.init({
         appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", 
         allowLocalhostAsSecureOrigin: true,
@@ -120,23 +135,24 @@ const AuthenticatedApp = () => {
     }
   }, [user]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
+  // 🟢 4. LOADING STATE -> SHOW SPLASH SCREEN
+  // If Auth is loading OR the 2.5s timer hasn't finished, show Splash
+  if (loading || !splashDone) {
+    return <Splash />;
   }
 
   return (
     <Routes>
       <Route path="/landing" element={user ? <Navigate to="/" replace /> : <Landing />} />
       <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
+      
+      {/* 🟢 Protected Route Logic */}
       <Route path="/" element={
         !user ? <Navigate to="/landing" replace /> 
         : profileMissing ? <Navigate to="/profile-setup" replace /> 
         : <Home />
       } />
+
       <Route path="/location/:id" element={!user ? <Navigate to="/landing" replace /> : <LocationDetails />} />
       <Route path="/user/:userId" element={!user ? <Navigate to="/landing" replace /> : <PublicProfile />} />
       <Route path="/profile-setup" element={!user ? <Navigate to="/landing" replace /> : <ProfileSetup />} />
@@ -144,9 +160,7 @@ const AuthenticatedApp = () => {
       <Route path="/settings" element={!user ? <Navigate to="/landing" replace /> : <Settings />} />
       <Route path="/business" element={!user ? <Navigate to="/landing" replace /> : <BusinessDashboard />} />
       <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/landing" />} />
-      <Route path="/auth" element={<Auth />} />
-      <Route path="/update-password" element={<UpdatePassword />} /> {/* 🟢 NEW ROUTE */}
-      <Route path="/" element={<Home />} />
+      <Route path="/update-password" element={<UpdatePassword />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
