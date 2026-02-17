@@ -210,7 +210,7 @@ export default function Landing() {
                     ].map((feature, i) => (
                         <div key={i} className="p-6 rounded-2xl bg-slate-900/60 backdrop-blur-md border border-white/10 hover:bg-white/5 transition-colors group cursor-default shadow-lg">
                             {feature.customIcon ? (
-                                <img src="/logo-desert.png" className="w-8 h-8 object-contain mb-4 drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]" alt="Tap" />
+                                <img src="/logo-desert-bigger.png" className="w-8 h-8 object-contain mb-4 drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]" alt="Tap" />
                             ) : (
                                 <feature.icon className="w-8 h-8 text-slate-400 group-hover:text-orange-500 transition-colors mb-4" />
                             )}
