@@ -1,46 +1,48 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { ArrowRight, MapPin, Zap, Shield, Smartphone, Users, Coffee } from 'lucide-react';
+import { ArrowRight, MapPin, Shield, Users, Coffee } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Landing() {
     const navigate = useNavigate();
 
     return (
-        <div className="min-h-screen bg-slate-950 text-white overflow-hidden relative selection:bg-amber-500/30">
+        <div className="min-h-screen bg-slate-950 text-white overflow-hidden relative selection:bg-rose-500/30 font-sans">
             
-            {/* 🟢 NEW: FIXED BACKGROUND IMAGE (El Paso Star) */}
+            {/* 🟢 BACKGROUND: EL PASO STAR */}
             <div 
                 className="fixed inset-0 z-0 pointer-events-none"
                 style={{
                     backgroundImage: `url('/el-paso-star2.jpg')`, 
-                    
-                    // 1. SHRINK: '100% auto' fits width exactly. Change to '80%' if you want it smaller.
-                    //    (Original was 'cover', which zooms in to fill screen)
                     backgroundSize: '100% auto', 
-                    
-                    // 2. RAISE: 'center -50px' moves the image UP by 50 pixels.
-                    //    Change '-50px' to '-100px' to raise it higher.
-                    //    Change 'top' back to 'center' to align horizontally.
                     backgroundPosition: 'center -50px',
-                    
                     backgroundAttachment: 'fixed',
-                    backgroundRepeat: 'no-repeat', // Prevents tiling if image is small
-                    opacity: 0.5 
+                    backgroundRepeat: 'no-repeat',
+                    opacity: 0.4 // Slightly lowered opacity to let the colors pop more
                 }}
             />
             
-            {/* 🟢 NEW: VIGNETTE OVERLAY (Dark edges, clear center) */}
-            <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(2,6,23,0.4)_0%,#020617_100%)]" />
+            {/* 🟢 BACKGROUND: VIGNETTE */}
+            <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(2,6,23,0.3)_0%,#020617_100%)]" />
+
+            {/* 🟢 NEW: SUNSET ATMOSPHERE GLOWS (Rose + Amber) */}
+            <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-rose-600/20 rounded-full blur-[120px] pointer-events-none z-0 mix-blend-screen" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-orange-600/10 rounded-full blur-[100px] pointer-events-none z-0" />
 
             <div className="relative z-10 max-w-7xl mx-auto px-6 py-8 flex flex-col min-h-screen">
                 
                 {/* Header */}
-                <header className="flex justify-between items-center mb-20 animate-in fade-in slide-in-from-top-4 duration-700">
-                    <div className="flex items-center gap-2">
-                        <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-900/20 backdrop-blur-md">
-                            <Zap className="text-black w-6 h-6 fill-black" />
+                <header className="flex justify-between items-center mb-12 lg:mb-20 animate-in fade-in slide-in-from-top-4 duration-700">
+                    <div className="flex items-center gap-3">
+                        <div className="relative w-12 h-12 group">
+                            {/* Logo Glow */}
+                            <div className="absolute inset-0 bg-orange-500/20 blur-lg rounded-full group-hover:bg-orange-500/30 transition-all" />
+                            <img 
+                                src="/logo-desert.png" 
+                                alt="TapTap" 
+                                className="relative w-full h-full object-contain drop-shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
+                            />
                         </div>
                         <span className="text-2xl font-black tracking-tight text-white drop-shadow-md">
                             TapTap
@@ -49,13 +51,13 @@ export default function Landing() {
                     <div className="flex gap-4">
                         <Button 
                             variant="ghost" 
-                            className="hidden sm:inline-flex text-slate-300 hover:text-white hover:bg-white/10"
+                            className="hidden sm:inline-flex text-slate-300 hover:text-white hover:bg-white/10 font-bold"
                             onClick={() => navigate('/auth')}
                         >
                             Log In
                         </Button>
                         <Button 
-                            className="bg-white text-black hover:bg-slate-200 font-bold rounded-full px-6 shadow-lg shadow-white/10"
+                            className="bg-white text-black hover:bg-slate-200 font-bold rounded-full px-6 shadow-lg shadow-white/10 transition-transform hover:scale-105"
                             onClick={() => navigate('/auth')}
                         >
                             Join Now
@@ -73,17 +75,29 @@ export default function Landing() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6 }}
                         >
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/60 border border-slate-700/50 backdrop-blur-md mb-8 shadow-lg">
-                                <span className="relative flex h-2.5 w-2.5">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                                </span>
-                                <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Live in El Paso</span>
+                            {/* Hero Logo */}
+                            <div className="hidden lg:block relative w-32 h-32 mb-6 -ml-4">
+                                <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full scale-110" />
+                                <img 
+                                    src="/logo-desert.png" 
+                                    className="relative w-full h-full object-contain" 
+                                    alt="TapTap Logo" 
+                                />
                             </div>
 
+                            {/* 🟢 BADGE: Switched to TEAL (Cactus/Agave color) for contrast */}
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/60 border border-teal-500/30 backdrop-blur-md mb-8 shadow-lg">
+                                <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-teal-500"></span>
+                                </span>
+                                <span className="text-xs font-bold text-teal-400 uppercase tracking-wider">Live in El Paso</span>
+                            </div>
+
+                            {/* 🟢 HEADLINE: 3-Color Gradient (Amber -> Orange -> Rose) */}
                             <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight leading-[1.1] drop-shadow-xl">
                                 No More Swiping <br />
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-amber-600 drop-shadow-sm">
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 drop-shadow-sm">
                                     Meet People IRL
                                 </span>
                             </h1>
@@ -94,20 +108,22 @@ export default function Landing() {
                             </p>
 
                             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                                {/* 🟢 BUTTON: Gradient Background */}
                                 <Button 
                                     size="lg"
                                     onClick={() => navigate('/auth')} 
-                                    className="h-14 px-8 text-lg bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl shadow-[0_0_40px_-10px_rgba(245,158,11,0.5)] transition-all hover:scale-105"
+                                    className="h-14 px-8 text-lg bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-400 hover:to-rose-500 text-white font-bold rounded-2xl shadow-[0_0_30px_-5px_rgba(244,63,94,0.4)] transition-all hover:scale-105 group border-0"
                                 >
                                     Start Exploring
-                                    <ArrowRight className="ml-2 w-5 h-5" />
+                                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                                 </Button>
                                 <Button 
                                     size="lg"
                                     variant="outline"
-                                    className="h-14 px-8 text-lg border-slate-600/50 bg-slate-900/40 backdrop-blur-md text-slate-200 hover:bg-slate-800/60 hover:text-white rounded-2xl"
+                                    className="h-14 px-8 text-lg border-slate-600/50 bg-slate-900/40 backdrop-blur-md text-slate-200 hover:bg-slate-800/60 hover:text-white rounded-2xl flex items-center gap-2"
                                 >
-                                    Only Women have the power to tap. Always.
+                                    <Shield className="w-4 h-4 text-orange-500" />
+                                    <span>Only Women Tap First</span>
                                 </Button>
                             </div>
                         </motion.div>
@@ -125,8 +141,8 @@ export default function Landing() {
                         </div>
                     </div>
 
-                    {/* Right: Visual Graphic (Abstract Phone) */}
-                    <div className="flex-1 w-full max-w-md relative">
+                    {/* Right: Phone Graphic */}
+                    <div className="flex-1 w-full max-w-md relative hidden lg:block">
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -135,22 +151,21 @@ export default function Landing() {
                         >
                             {/* Mock App UI */}
                             <div className="absolute inset-0 bg-slate-950/50 flex flex-col">
-                                {/* Map Header */}
                                 <div className="h-1/2 bg-slate-900/50 relative p-6 flex flex-col justify-end">
-                                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-900/20 to-slate-950/80"></div>
+                                    <div className="absolute inset-0 bg-gradient-to-b from-rose-900/20 to-slate-950/90"></div>
                                     
-                                    {/* Floating Avatars */}
+                                    {/* Avatars */}
                                     <motion.div 
                                         animate={{ y: [0, -10, 0] }} 
                                         transition={{ repeat: Infinity, duration: 4 }}
-                                        className="absolute top-20 left-10 w-12 h-12 rounded-full border-2 border-amber-500 bg-slate-800 z-10 overflow-hidden shadow-lg shadow-amber-500/20"
+                                        className="absolute top-20 left-10 w-12 h-12 rounded-full border-2 border-orange-500 bg-slate-800 z-10 overflow-hidden shadow-lg shadow-orange-500/20"
                                     >
                                         <img src="https://i.pravatar.cc/100?img=32" alt="User" />
                                     </motion.div>
                                     <motion.div 
                                         animate={{ y: [0, 15, 0] }} 
                                         transition={{ repeat: Infinity, duration: 5 }}
-                                        className="absolute top-10 right-16 w-10 h-10 rounded-full border-2 border-green-500 bg-slate-800 z-10 overflow-hidden shadow-lg shadow-green-500/20"
+                                        className="absolute top-10 right-16 w-10 h-10 rounded-full border-2 border-teal-500 bg-slate-800 z-10 overflow-hidden shadow-lg shadow-teal-500/20"
                                     >
                                         <img src="https://i.pravatar.cc/100?img=12" alt="User" />
                                     </motion.div>
@@ -165,15 +180,15 @@ export default function Landing() {
                                         { name: "Union Draft House", type: "BAR", dist: "0.3 mi", active: false },
                                         { name: "San Jacinto Plaza", type: "PARK", dist: "0.5 mi", active: false },
                                     ].map((item, i) => (
-                                        <div key={i} className={`p-3 rounded-xl border flex items-center justify-between backdrop-blur-md ${item.active ? 'bg-amber-500/20 border-amber-500/50 shadow-lg shadow-amber-500/10' : 'bg-slate-900/60 border-slate-800/60'}`}>
+                                        <div key={i} className={`p-3 rounded-xl border flex items-center justify-between backdrop-blur-md ${item.active ? 'bg-orange-500/10 border-orange-500/40 shadow-lg shadow-orange-500/10' : 'bg-slate-900/60 border-slate-800/60'}`}>
                                             <div>
                                                 <div className="font-bold text-white text-sm">{item.name}</div>
                                                 <div className="text-xs text-slate-400 flex gap-2 mt-1">
-                                                    <span className={item.active ? "text-amber-400 font-bold" : "text-slate-500"}>{item.type}</span>
+                                                    <span className={item.active ? "text-orange-400 font-bold" : "text-slate-500"}>{item.type}</span>
                                                     <span>• {item.dist}</span>
                                                 </div>
                                             </div>
-                                            {item.active && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>}
+                                            {item.active && <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.5)]"></div>}
                                         </div>
                                     ))}
                                 </div>
@@ -181,20 +196,24 @@ export default function Landing() {
                         </motion.div>
                         
                         {/* Glow Behind Phone */}
-                        <div className="absolute inset-0 bg-amber-500/10 blur-[100px] -z-10 rounded-full pointer-events-none"></div>
+                        <div className="absolute inset-0 bg-orange-500/20 blur-[120px] -z-10 rounded-full pointer-events-none"></div>
                     </div>
 
                 </main>
 
-                {/* Feature Grid (Bottom) */}
+                {/* Feature Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 mb-12">
                     {[
                         { icon: MapPin, title: "Proximity First", desc: "You must be within 0.5 miles to check in. No fakes." },
-                        { icon: Zap, title: "Tap to Connect", desc: "Women have the power to tap men. Men check in and set the vibe." },
+                        { customIcon: true, title: "Tap to Connect", desc: "Women have the power to tap men. Men check in and set the vibe." },
                         { icon: Coffee, title: "Real Venues", desc: "Curated spots in your city. Bars, cafes, and parks." }
                     ].map((feature, i) => (
-                        <div key={i} className="p-6 rounded-2xl bg-slate-900/40 backdrop-blur-md border border-white/10 hover:bg-white/5 transition-colors group cursor-default shadow-lg">
-                            <feature.icon className="w-8 h-8 text-slate-400 group-hover:text-amber-500 transition-colors mb-4" />
+                        <div key={i} className="p-6 rounded-2xl bg-slate-900/60 backdrop-blur-md border border-white/10 hover:bg-white/5 transition-colors group cursor-default shadow-lg">
+                            {feature.customIcon ? (
+                                <img src="/logo-desert.png" className="w-8 h-8 object-contain mb-4 drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]" alt="Tap" />
+                            ) : (
+                                <feature.icon className="w-8 h-8 text-slate-400 group-hover:text-orange-500 transition-colors mb-4" />
+                            )}
                             <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
                             <p className="text-slate-400 text-sm leading-relaxed">{feature.desc}</p>
                         </div>
