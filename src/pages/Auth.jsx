@@ -16,6 +16,7 @@ export default function Auth() {
   // Form Data
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // 🟢 NEW STATE
   const [fullName, setFullName] = useState('');
   const [handle, setHandle] = useState('');
   const [phone, setPhone] = useState('');
@@ -61,16 +62,17 @@ export default function Auth() {
       else if (view === 'sign_up') {
         // Validation
         if (!isValidPassword(password)) throw new Error("Password must be 6+ chars.");
+        if (password !== confirmPassword) throw new Error("Passwords do not match."); // 🟢 CHECK MATCH
+        
         if (!gender) throw new Error("Select your gender.");
         if (!interestedIn) throw new Error("Select who you are interested in.");
         if (!birthdate) throw new Error("Enter birthdate.");
         if (!handle) throw new Error("Choose a handle.");
-        // Phone is optional for Auth now, but required for Profile
         if (!phone) throw new Error("Phone number is required for your profile.");
 
         const cleanHandle = handle.replace('@', '').toLowerCase();
 
-        // A. Create User (This sends the email automatically)
+        // A. Create User (This sends the email automatically if "Confirm Email" is ON in Supabase)
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -81,7 +83,7 @@ export default function Auth() {
               handle: cleanHandle,
               gender: gender, 
               interested_in: interestedIn,
-              phone: phone, // 🟢 Saved to DB, but no SMS sent
+              phone: phone,
               birthdate: birthdate,
               avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${cleanHandle}`
             },
@@ -99,13 +101,13 @@ export default function Auth() {
          const { error } = await supabase.auth.verifyOtp({
             email: email,
             token: otpCode,
-            type: 'signup', // 🟢 Specifically verifying the signup email
+            type: 'signup', 
          });
          
          if (error) throw error;
          
          toast.success("Email verified! Welcome to TapTap.");
-         window.location.href = '/'; // Hard reload to ensure profile loads
+         window.location.href = '/'; 
       }
       
       // 4. SIGN IN (Normal)
@@ -151,7 +153,7 @@ export default function Auth() {
 
           <form onSubmit={handleAuth} className="space-y-4">
             
-            {/* 🟢 VIEW: SIGN UP FORM */}
+            {/* VIEW: SIGN UP FORM */}
             {view === 'sign_up' && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="grid grid-cols-2 gap-4">
@@ -195,7 +197,7 @@ export default function Auth() {
               </div>
             )}
 
-            {/* 🟢 VIEW: EMAIL/PASS */}
+            {/* VIEW: EMAIL/PASS */}
             {view !== 'verify_email' && (
              <div className="space-y-4">
                 <div className="relative">
@@ -203,15 +205,32 @@ export default function Auth() {
                     <Input type="email" placeholder="Email Address" className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 </div>
                 {view !== 'forgot_password' && (
-                <div className="relative">
-                    <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
-                    <Input type="password" placeholder="Password (min 6 chars)" className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                </div>
+                <>
+                    <div className="relative">
+                        <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
+                        <Input type="password" placeholder="Password (min 6 chars)" className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                    </div>
+                    
+                    {/* 🟢 CONFIRM PASSWORD (Sign Up Only) */}
+                    {view === 'sign_up' && (
+                        <div className="relative animate-in fade-in slide-in-from-top-2 duration-300">
+                            <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
+                            <Input 
+                                type="password" 
+                                placeholder="Confirm Password" 
+                                className={`bg-slate-900/50 border-slate-800 h-12 pl-10 text-white ${confirmPassword && confirmPassword !== password ? 'border-red-500 focus:ring-red-500' : ''}`}
+                                value={confirmPassword} 
+                                onChange={(e) => setConfirmPassword(e.target.value)} 
+                                required 
+                            />
+                        </div>
+                    )}
+                </>
                 )}
              </div>
             )}
 
-            {/* 🟢 VIEW: VERIFY EMAIL CODE */}
+            {/* VIEW: VERIFY EMAIL CODE */}
             {view === 'verify_email' && (
                <div className="space-y-4 animate-in fade-in zoom-in duration-300">
                   <div className="relative">
