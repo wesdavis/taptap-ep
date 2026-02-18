@@ -36,7 +36,7 @@ export default function ProfileSetup() {
     full_name: '',
     handle: '',
     gender: '',
-    birth_date: '',
+    birthdate: '',
     relationship_status: '',
     bio: '',
     avatar_url: '',
@@ -80,7 +80,7 @@ export default function ProfileSetup() {
             full_name: data.display_name || data.full_name || '',
             handle: data.handle || '',
             gender: data.gender || '',
-            birth_date: data.birth_date || '', 
+            birthdate: data.birthdate || '', 
             relationship_status: data.relationship_status || '', 
             bio: data.bio || '',
             avatar_url: data.avatar_url || '',
@@ -250,7 +250,7 @@ export default function ProfileSetup() {
             finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.full_name)}&background=random&color=fff&size=256`;
         }
 
-        const safeBirthDate = formData.birth_date ? formData.birth_date : null;
+        const safeBirthDate = formData.birthdate ? formData.birthdate : null;
         const safeRelationship = formData.relationship_status ? formData.relationship_status : null;
         const safeInterest = formData.interested_in ? formData.interested_in : null;
 
@@ -260,7 +260,7 @@ export default function ProfileSetup() {
             display_name: formData.full_name, 
             handle: cleanHandle,
             gender: formData.gender,
-            birth_date: safeBirthDate, 
+            birthdate: safeBirthDate, 
             relationship_status: safeRelationship, 
             interested_in: safeInterest,
             bio: formData.bio,
@@ -432,8 +432,8 @@ export default function ProfileSetup() {
                     <Input 
                         type="date" 
                         required
-                        value={formData.birth_date} 
-                        onChange={e => setFormData({...formData, birth_date: e.target.value})}
+                        value={formData.birthdate} 
+                        onChange={e => setFormData({...formData, birthdate: e.target.value})}
                         className="bg-slate-900 border-slate-800 w-full p-3" 
                     />
                 </div>
