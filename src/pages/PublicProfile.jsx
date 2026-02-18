@@ -1,3 +1,4 @@
+// ... (Imports match your existing file) ...
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -5,8 +6,9 @@ import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea"; 
-import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight, User, ShieldBan, Flag, Shield } from 'lucide-react';
+import { ArrowLeft, MapPin, Zap, Check, Loader2, X, ChevronLeft, ChevronRight, User, ShieldBan, Flag, Shield, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
+// ... (Keep your Dialog imports) ...
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 
 export default function PublicProfile() {
+    // ... (Keep existing state & useEffect logic same as before) ...
     const params = useParams();
     const userId = params.userId || params.userid;
 
@@ -38,19 +41,15 @@ export default function PublicProfile() {
     const [status, setStatus] = useState(null);
     
     // Match Logic State
-    const [canConnect, setCanConnect] = useState(false); // Means "Location & Preferences Match"
-    const [isGenderLocked, setIsGenderLocked] = useState(false); // Means "Male looking at Female"
+    const [canConnect, setCanConnect] = useState(false); 
+    const [isGenderLocked, setIsGenderLocked] = useState(false); 
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Location State
     const [isSameLocation, setIsSameLocation] = useState(false);
-    
-    // Gallery State
     const [photos, setPhotos] = useState([]);
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
     const [selectedPhoto, setSelectedPhoto] = useState(null); 
 
-    // 🟢 BLOCK & REPORT STATE
     const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
     const [blocking, setBlocking] = useState(false);
     
@@ -68,9 +67,9 @@ export default function PublicProfile() {
         }
     }, [user, userId]);
 
+    // ... (Keep loadUniversalData, handleUniversalTap, handleBlockUser, handleReportUser exactly the same) ...
     async function loadUniversalData() {
         try {
-            // 1. Fetch Target User Profile
             const { data: profileData, error } = await supabase
                 .from('profiles')
                 .select('*')
@@ -80,20 +79,17 @@ export default function PublicProfile() {
             if (error) throw error;
             setProfile(profileData);
 
-            // Setup Gallery
             const p = (profileData.photos && profileData.photos.length > 0) 
                 ? profileData.photos 
                 : [profileData.avatar_url];
             setPhotos(p);
 
-            // 2. Fetch MY Profile (Gender + Interest)
             const { data: myProfile } = await supabase
                 .from('profiles')
                 .select('gender, interested_in')
                 .eq('id', user.id)
                 .single();
 
-            // 3. LOCATION CHECK
             const { data: myCheckin } = await supabase
                 .from('checkins')
                 .select('location_id')
@@ -111,28 +107,22 @@ export default function PublicProfile() {
             const matchLoc = myCheckin && targetCheckin && (myCheckin.location_id === targetCheckin.location_id);
             setIsSameLocation(matchLoc);
 
-            // 4. 🟢 FIXED MATCH LOGIC (Bulletproof)
             if (myProfile && profileData && !isMe) {
                 const myGender = (myProfile.gender || '').toLowerCase();
                 const theirGender = (profileData.gender || '').toLowerCase();
-                const myInterest = myProfile.interested_in; 
+                const myInterest = (myProfile.interested_in || '').toLowerCase(); 
 
-                // A. Check Gender Lock (Men cannot tap Women)
                 const genderLock = (myGender === 'male' && theirGender === 'female');
                 setIsGenderLocked(genderLock);
 
-                // B. Check Preference Match
                 let allowed = false;
-                if (myInterest === 'Everyone') allowed = true;
-                if (myInterest === 'Male' && theirGender === 'male') allowed = true;
-                if (myInterest === 'Female' && theirGender === 'female') allowed = true;
+                if (myInterest === 'everyone') allowed = true;
+                if (myInterest === 'male' && theirGender === 'male') allowed = true;
+                if (myInterest === 'female' && theirGender === 'female') allowed = true;
                 
-                // Show the bar if: Preferences Match AND Same Location
-                // (We will handle the Disable state in the UI via isGenderLocked)
                 setCanConnect(allowed && matchLoc);
             }
 
-            // 5. Check Existing Ping Status
             if (myCheckin) {
                 const { data: ping } = await supabase
                     .from('pings')
@@ -185,7 +175,6 @@ export default function PublicProfile() {
         }
     };
 
-    // 🟢 BLOCK USER LOGIC
     const handleBlockUser = async () => {
         setBlocking(true);
         try {
@@ -204,7 +193,6 @@ export default function PublicProfile() {
         }
     };
 
-    // 🟢 REPORT USER LOGIC
     const handleReportUser = async () => {
         if (!reportReason.trim()) {
             toast.error("Please explain why you are reporting them.");
@@ -278,7 +266,6 @@ export default function PublicProfile() {
                         </div>
                     )}
                     
-                    {/* Progress Bars */}
                     {photos.length > 1 && (
                         <div className="absolute top-2 left-2 right-2 flex gap-1 z-20">
                             {photos.map((_, i) => (
@@ -290,14 +277,12 @@ export default function PublicProfile() {
                         </div>
                     )}
 
-                    {/* Navigation Tap Zones */}
                     <div className="absolute inset-0 flex z-10">
                         <div className="w-1/3 h-full" onClick={prevPhoto} />
                         <div className="w-1/3 h-full" onClick={openFullScreen} /> 
                         <div className="w-1/3 h-full" onClick={nextPhoto} />
                     </div>
 
-                    {/* Arrows */}
                     {photos.length > 1 && (
                         <>
                             <button onClick={prevPhoto} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition pointer-events-none z-20">
@@ -313,9 +298,18 @@ export default function PublicProfile() {
                 <h2 className="text-3xl font-bold mb-2 text-center">{profile.display_name || profile.full_name}</h2>
                 <p className="text-amber-500 font-bold mb-4">@{profile.handle}</p>
                 
-                <div className="flex items-center gap-2 text-slate-400 mb-6">
-                    <MapPin className="w-4 h-4" /> 
-                    <span>El Paso, TX</span>
+                {/* 🟢 NEW: VETTING INFO DISPLAY */}
+                <div className="flex flex-col items-center gap-2 mb-6 text-slate-400">
+                    <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" /> 
+                        <span>{profile.location || 'El Paso, TX'}</span>
+                    </div>
+                    {profile.job_title && (
+                        <div className="flex items-center gap-2 text-slate-500 text-sm">
+                            <Briefcase className="w-3 h-3" />
+                            <span>{profile.job_title}</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="w-full max-w-xs bg-white/5 rounded-2xl p-6 border border-white/10 mb-8 text-center">
@@ -324,7 +318,7 @@ export default function PublicProfile() {
 
                 <div className="flex gap-3">
                     <Badge variant="secondary" className="bg-slate-800 text-slate-300 px-3 py-1">
-                        {profile.gender || 'User'}
+                        {profile.gender ? (profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)) : 'User'}
                     </Badge>
                     {profile.relationship_status && (
                         <Badge variant="secondary" className="bg-slate-800 text-slate-300 px-3 py-1">
@@ -333,6 +327,7 @@ export default function PublicProfile() {
                     )}
                 </div>
 
+                {/* ... (Rest of the file with SharedHistory, Safety Tools, Buttons is identical) ... */}
                 <SharedHistory targetUserId={userId} />
 
                 {/* 🟢 SAFETY TOOLS (Block & Report) */}
@@ -374,7 +369,6 @@ export default function PublicProfile() {
                             </div>
 
                             {isGenderLocked ? (
-                                // 🟢 LOCKED STATE BUTTON
                                 <Button 
                                     disabled
                                     className="h-12 px-4 bg-slate-800 text-slate-500 font-bold rounded-xl border border-slate-700"
@@ -383,7 +377,6 @@ export default function PublicProfile() {
                                     No Tap
                                 </Button>
                             ) : (
-                                // 🟢 ACTIVE STATE BUTTON
                                 <Button 
                                     onClick={handleUniversalTap} 
                                     disabled={isSubmitting}
@@ -424,7 +417,7 @@ export default function PublicProfile() {
                 </div>
             )}
 
-            {/* 🟢 BLOCK MODAL */}
+            {/* BLOCK MODAL */}
             <AlertDialog open={isBlockModalOpen} onOpenChange={setIsBlockModalOpen}>
                 <AlertDialogContent className="bg-slate-950 border border-slate-800 text-white w-[90%] rounded-2xl">
                     <AlertDialogHeader>
@@ -442,7 +435,7 @@ export default function PublicProfile() {
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* 🟢 REPORT MODAL */}
+            {/* REPORT MODAL */}
             <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
                 <DialogContent className="bg-slate-950 border border-slate-800 text-white w-[90%] rounded-2xl">
                     <DialogHeader>
@@ -471,6 +464,7 @@ export default function PublicProfile() {
     );
 }
 
+// ... (Keep SharedHistory function exactly as is) ...
 function SharedHistory({ targetUserId }) {
     const { user } = useAuth();
     const [events, setEvents] = useState([]);

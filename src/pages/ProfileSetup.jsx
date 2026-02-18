@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, UserCheck } from 'lucide-react';
+import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, UserCheck, Briefcase, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 import * as nsfwjs from 'nsfwjs';
@@ -27,7 +27,6 @@ export default function ProfileSetup() {
   const [objectModel, setObjectModel] = useState(null);
   const [modelsLoading, setModelsLoading] = useState(true);
 
-  const [enriching, setEnriching] = useState(false);
   const [venues, setVenues] = useState([]); 
   const [selectedPromoId, setSelectedPromoId] = useState("");
 
@@ -41,25 +40,23 @@ export default function ProfileSetup() {
     avatar_url: '',
     photos: [],
     interested_in: '', 
+    location: '', // 🟢 NEW
+    job_title: '', // 🟢 NEW
     is_admin: false 
   });
 
   useEffect(() => {
     async function init() {
-        // 1. Load BOTH AI Models (Fail Closed Logic)
         try {
             console.log("🛡️ Initializing Safety Systems...");
-            
-            // Load them in parallel for speed
             const [_nsfw, _coco] = await Promise.all([
                 nsfwjs.load(),
                 cocoSsd.load()
             ]);
-
             setNsfwModel(_nsfw);
             setObjectModel(_coco);
             setModelsLoading(false); 
-            console.log("✅ All Systems Ready: NSFW + Human Detection active.");
+            console.log("✅ All Systems Ready.");
         } catch (err) {
             console.error("Failed to load safety models", err);
             toast.error("Security System failed to load. Please refresh.");
@@ -78,15 +75,19 @@ export default function ProfileSetup() {
         setFormData({
             full_name: data.display_name || data.full_name || '',
             handle: data.handle || '',
-            // 🟢 FORCE LOWERCASE to match Auth.jsx values
+            // We verify these exist but don't show inputs for them anymore
             gender: (data.gender || '').toLowerCase(),
             birthdate: data.birthdate || '', 
+            interested_in: (data.interested_in || '').toLowerCase(),
+            
+            // Editable Fields
             relationship_status: data.relationship_status || '', 
             bio: data.bio || '',
             avatar_url: data.avatar_url || '',
             photos: data.photos || [],
-            // 🟢 FORCE LOWERCASE
-            interested_in: (data.interested_in || '').toLowerCase(),
+            location: data.location || '', // 🟢 LOAD NEW
+            job_title: data.job_title || '', // 🟢 LOAD NEW
+            
             is_admin: data.is_admin || false 
         });
         if (data.is_admin) {
@@ -109,7 +110,6 @@ export default function ProfileSetup() {
       }
   }
 
-  // 🟢 DOUBLE CHECK: Human + Safe
   const checkSafety = async (file) => {
       if (!nsfwModel || !objectModel) {
           toast.error("Security scanner not ready. Please wait.");
@@ -123,48 +123,37 @@ export default function ProfileSetup() {
           
           img.onload = async () => {
               try {
-                  // --- STEP 1: IS IT A PERSON? ---
                   const objects = await objectModel.detect(img);
                   const person = objects.find(o => o.class === 'person');
 
                   if (!person) {
-                      console.error("🚨 BLOCKED: No human detected.");
                       toast.error("Photo Rejected", { description: "Please upload a photo of yourself (Face or Body)." });
                       resolve(false);
                       return;
                   }
 
-                  // --- STEP 2: IS IT SAFE? ---
                   const predictions = await nsfwModel.classify(img);
                   URL.revokeObjectURL(objectUrl); 
 
-                  // Categories: Neutral, Drawing, Sexy, Porn, Hentai
                   const porn = predictions.find(p => p.className === 'Porn');
                   const hentai = predictions.find(p => p.className === 'Hentai');
                   const sexy = predictions.find(p => p.className === 'Sexy');
                   
-                  const pornScore = porn ? porn.probability : 0;
-                  const hentaiScore = hentai ? hentai.probability : 0;
-                  const sexyScore = sexy ? sexy.probability : 0;
-                  
-                  // Calculate Total Badness
-                  const combinedExplicit = pornScore + hentaiScore;
+                  const combinedExplicit = (porn?.probability || 0) + (hentai?.probability || 0);
+                  const sexyScore = sexy?.probability || 0;
 
                   if (combinedExplicit > 0.25) {
-                      console.error(`🚨 BLOCKED: Explicit content detected`);
                       toast.error("Photo Rejected", { description: "Explicit content detected." });
                       resolve(false); 
                       return;
                   }
 
-                  if (sexyScore > 0.40 && pornScore > 0.05) {
-                      console.error("🚨 BLOCKED: Nudity detected");
+                  if (sexyScore > 0.40 && (porn?.probability || 0) > 0.05) {
                       toast.error("Photo Rejected", { description: "Nudity detected." });
                       resolve(false);
                       return;
                   }
 
-                  // Safe
                   resolve(true); 
 
               } catch (err) {
@@ -243,33 +232,31 @@ export default function ProfileSetup() {
             finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.full_name)}&background=random&color=fff&size=256`;
         }
 
-        const safeBirthDate = formData.birthdate ? formData.birthdate : null;
-        const safeRelationship = formData.relationship_status ? formData.relationship_status : null;
-        const safeInterest = formData.interested_in ? formData.interested_in : null;
-
         const { error } = await supabase.from('profiles').upsert({
             id: user.id,
             full_name: formData.full_name,
             display_name: formData.full_name, 
             handle: cleanHandle,
-            gender: formData.gender, // Now verified lowercase
-            birthdate: safeBirthDate, 
-            relationship_status: safeRelationship, 
-            interested_in: safeInterest, // Now verified lowercase
+            
+            // 🟢 PERSISTING HIDDEN FIELDS (Loaded from DB, saved back)
+            gender: formData.gender, 
+            birthdate: formData.birthdate, 
+            interested_in: formData.interested_in,
+            
+            // 🟢 NEW FIELDS
+            location: formData.location,
+            job_title: formData.job_title,
+            relationship_status: formData.relationship_status, 
+            
             bio: formData.bio,
             avatar_url: finalAvatar, 
             photos: formData.photos, 
             updated_at: new Date()
         });
 
-        if (error) {
-            console.error("Supabase Error:", error); 
-            throw error;
-        }
+        if (error) throw error;
 
         toast.success("Profile updated!");
-        
-        // 🟢 Force Reload to update AuthContext state
         window.location.href = '/'; 
 
     } catch (error) {
@@ -282,17 +269,11 @@ export default function ProfileSetup() {
   const handleLogout = async () => {
     try {
       if (user) {
-          await supabase
-            .from('checkins')
-            .update({ is_active: false })
-            .eq('user_id', user.id);
+          await supabase.from('checkins').update({ is_active: false }).eq('user_id', user.id);
       }
-      
       if (logout) await logout();
       navigate('/landing');
-      toast.success("Logged out successfully");
     } catch (error) {
-      console.error("Logout error:", error);
       if (logout) await logout();
       navigate('/landing');
     }
@@ -319,7 +300,6 @@ export default function ProfileSetup() {
             <div className="space-y-3">
                 <div className="flex justify-between items-center">
                     <Label>Your Photos</Label>
-                    {/* Visual Security Status */}
                     {modelsLoading ? (
                         <span className="text-[10px] text-amber-500 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> Security Loading...</span>
                     ) : (
@@ -353,59 +333,46 @@ export default function ProfileSetup() {
             <div className="space-y-2"><Label>Display Name</Label><Input required value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             <div className="space-y-2"><Label>Handle (@)</Label><Input required value={formData.handle} onChange={e => setFormData({...formData, handle: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
             
-            {/* STRICT BINARY GENDERS & INTERESTS */}
+            {/* 🟢 NEW: VETTING INFO (Job & Location) */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label>I am a...</Label>
-                    <Select value={formData.gender} onValueChange={val => setFormData({...formData, gender: val})}>
-                        <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                            {/* 🟢 CHANGED VALUES TO LOWERCASE */}
-                            <SelectItem value="male">Male</SelectItem>
-                            <SelectItem value="female">Female</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>Interested In...</Label>
-                    <Select value={formData.interested_in} onValueChange={val => setFormData({...formData, interested_in: val})}>
-                        <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                            {/* 🟢 CHANGED VALUES TO LOWERCASE */}
-                            <SelectItem value="male">Men</SelectItem>
-                            <SelectItem value="female">Women</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            {/* DEMOGRAPHICS */}
-            <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-2">
-                    <Label>Birthday</Label>
+                    <Label className="flex items-center gap-1"><MapPin className="w-3 h-3 text-slate-400"/> Where are you from?</Label>
                     <Input 
-                        type="date" 
-                        required
-                        value={formData.birthdate} 
-                        onChange={e => setFormData({...formData, birthdate: e.target.value})}
-                        className="bg-slate-900 border-slate-800 w-full p-3" 
+                        placeholder="El Paso, TX" 
+                        value={formData.location} 
+                        onChange={e => setFormData({...formData, location: e.target.value})} 
+                        className="bg-slate-900 border-slate-800" 
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select value={formData.relationship_status} onValueChange={val => setFormData({...formData, relationship_status: val})}>
-                        <SelectTrigger className="bg-slate-900 border-slate-800 w-full p-3 h-auto"><SelectValue placeholder="Select Status" /></SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                            <SelectItem value="Single">Single</SelectItem>
-                            <SelectItem value="Taken">Taken</SelectItem>
-                            <SelectItem value="Complicated">It's Complicated</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <Label className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-slate-400"/> What do you do?</Label>
+                    <Input 
+                        placeholder="Nurse, Student..." 
+                        value={formData.job_title} 
+                        onChange={e => setFormData({...formData, job_title: e.target.value})} 
+                        className="bg-slate-900 border-slate-800" 
+                    />
                 </div>
             </div>
 
-            <div className="space-y-2"><Label>Bio</Label><Textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="bg-slate-900 border-slate-800" /></div>
-            <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">{saving ? <Loader2 className="animate-spin" /> : "Save Changes"}</Button>
+            {/* STATUS */}
+            <div className="space-y-2">
+                <Label>Relationship Status</Label>
+                <Select value={formData.relationship_status} onValueChange={val => setFormData({...formData, relationship_status: val})}>
+                    <SelectTrigger className="bg-slate-900 border-slate-800 w-full"><SelectValue placeholder="Select Status" /></SelectTrigger>
+                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                        <SelectItem value="Single">Single</SelectItem>
+                        <SelectItem value="Taken">Taken</SelectItem>
+                        <SelectItem value="Complicated">It's Complicated</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div className="space-y-2"><Label>Bio</Label><Textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="bg-slate-900 border-slate-800" placeholder="Tell us about yourself..." /></div>
+            
+            <Button type="submit" disabled={saving} className="w-full bg-amber-500 text-black font-bold hover:bg-amber-400">
+                {saving ? <Loader2 className="animate-spin" /> : "Save Changes"}
+            </Button>
         </form>
         
         {/* ADMIN ZONE */}
@@ -419,9 +386,6 @@ export default function ProfileSetup() {
                     <ShieldAlert className="w-5 h-5" />
                     OPEN SHERIFF'S OFFICE
                 </Button>
-                <p className="text-[10px] text-red-500/40 text-center mt-2 font-mono uppercase tracking-widest">
-                    Authorized Personnel Only
-                </p>
             </div>
         )}
       </div>
