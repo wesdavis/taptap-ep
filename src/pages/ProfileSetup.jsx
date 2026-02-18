@@ -7,12 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, Crown, Trash2, RefreshCw, Camera, Lock, UserCheck } from 'lucide-react';
+import { Loader2, ArrowLeft, LogOut, X, Plus, ShieldAlert, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
-import * as tf from '@tensorflow/tfjs';
 import * as nsfwjs from 'nsfwjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd'; // 🟢 NEW: Object Detector
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
 
 export default function ProfileSetup() {
   const { user, logout } = useAuth();
@@ -59,7 +58,7 @@ export default function ProfileSetup() {
 
             setNsfwModel(_nsfw);
             setObjectModel(_coco);
-            setModelsLoading(false); // Only allow uploads after BOTH are ready
+            setModelsLoading(false); 
             console.log("✅ All Systems Ready: NSFW + Human Detection active.");
         } catch (err) {
             console.error("Failed to load safety models", err);
@@ -79,13 +78,15 @@ export default function ProfileSetup() {
         setFormData({
             full_name: data.display_name || data.full_name || '',
             handle: data.handle || '',
-            gender: data.gender || '',
+            // 🟢 FORCE LOWERCASE to match Auth.jsx values
+            gender: (data.gender || '').toLowerCase(),
             birthdate: data.birthdate || '', 
             relationship_status: data.relationship_status || '', 
             bio: data.bio || '',
             avatar_url: data.avatar_url || '',
             photos: data.photos || [],
-            interested_in: data.interested_in || '',
+            // 🟢 FORCE LOWERCASE
+            interested_in: (data.interested_in || '').toLowerCase(),
             is_admin: data.is_admin || false 
         });
         if (data.is_admin) {
@@ -133,8 +134,6 @@ export default function ProfileSetup() {
                       return;
                   }
 
-                  console.log("✅ Human Detected:", person.score);
-
                   // --- STEP 2: IS IT SAFE? ---
                   const predictions = await nsfwModel.classify(img);
                   URL.revokeObjectURL(objectUrl); 
@@ -151,19 +150,15 @@ export default function ProfileSetup() {
                   // Calculate Total Badness
                   const combinedExplicit = pornScore + hentaiScore;
 
-                  console.log(`🛡️ Explicit Analysis: Porn=${(pornScore*100).toFixed(0)}% Hentai=${(hentaiScore*100).toFixed(0)}% Sexy=${(sexyScore*100).toFixed(0)}%`);
-
-                  // RULE 1: The "Sum of Filth" (> 25% Block)
                   if (combinedExplicit > 0.25) {
-                      console.error(`🚨 BLOCKED: Explicit content detected (Combined: ${(combinedExplicit*100).toFixed(0)}%)`);
+                      console.error(`🚨 BLOCKED: Explicit content detected`);
                       toast.error("Photo Rejected", { description: "Explicit content detected." });
                       resolve(false); 
                       return;
                   }
 
-                  // RULE 2: The "Suspiciously Sexy" Rule (>40% Sexy + >5% Porn)
                   if (sexyScore > 0.40 && pornScore > 0.05) {
-                      console.error("🚨 BLOCKED: Nudity detected (High Sexy + Trace Porn)");
+                      console.error("🚨 BLOCKED: Nudity detected");
                       toast.error("Photo Rejected", { description: "Nudity detected." });
                       resolve(false);
                       return;
@@ -193,16 +188,14 @@ export default function ProfileSetup() {
     setUploading(true);
 
     try {
-        // A. Run Safety Check
         const isSafe = await checkSafety(file);
         if (!isSafe) {
             e.target.value = null; 
             setScanning(false);
             setUploading(false);
-            return; // 🛑 STOP UPLOAD
+            return; 
         }
 
-        // B. Upload to Supabase
         const fileExt = file.name.split('.').pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
@@ -259,10 +252,10 @@ export default function ProfileSetup() {
             full_name: formData.full_name,
             display_name: formData.full_name, 
             handle: cleanHandle,
-            gender: formData.gender,
+            gender: formData.gender, // Now verified lowercase
             birthdate: safeBirthDate, 
             relationship_status: safeRelationship, 
-            interested_in: safeInterest,
+            interested_in: safeInterest, // Now verified lowercase
             bio: formData.bio,
             avatar_url: finalAvatar, 
             photos: formData.photos, 
@@ -275,7 +268,10 @@ export default function ProfileSetup() {
         }
 
         toast.success("Profile updated!");
-        navigate('/'); 
+        
+        // 🟢 Force Reload to update AuthContext state
+        window.location.href = '/'; 
+
     } catch (error) {
         toast.error(`Error: ${error.message || "Could not save"}`);
     } finally {
@@ -300,50 +296,6 @@ export default function ProfileSetup() {
       if (logout) await logout();
       navigate('/landing');
     }
-  };
-
-  // --- ADMIN TOOLS ---
-  const handleSetPromotion = async () => {
-    if (!selectedPromoId) return;
-    setEnriching(true);
-    try {
-        await supabase.from('locations').update({ is_promoted: false }).neq('id', 0);
-        await supabase.from('locations').update({ is_promoted: true }).eq('id', selectedPromoId);
-        toast.success("Promotion Updated!");
-        loadVenues(); 
-    } catch (e) { toast.error("Failed to set promotion"); } finally { setEnriching(false); }
-  }
-
-  const runGlobalCheckout = async () => {
-      if (!confirm("⚠️ ADMIN: Force checkout for EVERYONE? The map will be empty.")) return;
-      setEnriching(true);
-      try {
-          await supabase.from('checkins').update({ is_active: false }).neq('id', 0);
-          toast.success("Dancefloor cleared! All users checked out.");
-      } catch (e) { toast.error("Failed to clear checkins"); } finally { setEnriching(false); }
-  }
-
-  const runResetMyGame = async () => {
-      if (!confirm("Reset your Pings? You can meet people again.")) return;
-      setEnriching(true);
-      try {
-          await supabase.from('pings').delete().or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`);
-          toast.success("History wiped. You are new again.");
-      } catch (e) { toast.error("Failed to reset"); } finally { setEnriching(false); }
-  }
-
-  const runEnrichment = async () => { 
-      if (!confirm("Admin: Fetch Data?")) return;
-      setEnriching(true);
-      toast.success("Enrichment mock run"); 
-      setEnriching(false);
-  };
-
-  const runPhotoFetch = async () => { 
-      if (!confirm("Admin: Fetch Photos?")) return;
-      setEnriching(true);
-      toast.success("Photo fetch mock run"); 
-      setEnriching(false);
   };
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
@@ -408,8 +360,9 @@ export default function ProfileSetup() {
                     <Select value={formData.gender} onValueChange={val => setFormData({...formData, gender: val})}>
                         <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                            <SelectItem value="Male">Male</SelectItem>
-                            <SelectItem value="Female">Female</SelectItem>
+                            {/* 🟢 CHANGED VALUES TO LOWERCASE */}
+                            <SelectItem value="male">Male</SelectItem>
+                            <SelectItem value="female">Female</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -418,8 +371,9 @@ export default function ProfileSetup() {
                     <Select value={formData.interested_in} onValueChange={val => setFormData({...formData, interested_in: val})}>
                         <SelectTrigger className="bg-slate-900 border-slate-800"><SelectValue placeholder="Select" /></SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                            <SelectItem value="Male">Men</SelectItem>
-                            <SelectItem value="Female">Women</SelectItem>
+                            {/* 🟢 CHANGED VALUES TO LOWERCASE */}
+                            <SelectItem value="male">Men</SelectItem>
+                            <SelectItem value="female">Women</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
-import { useNavigate, useSearchParams } from 'react-router-dom'; // 🟢 Added useSearchParams
+import { useNavigate, useSearchParams } from 'react-router-dom'; 
 import VenueAnalytics from '@/components/business/VenueAnalytics';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +16,12 @@ const STRIPE_PRICE_ID = "price_1T02XA2MJxJeVXhRzYogRFho";
 export default function BusinessDashboard() {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams(); // 🟢 To check for payment success
+    const [searchParams] = useSearchParams(); 
     
     const [venue, setVenue] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [promoting, setPromoting] = useState(false); // 🟢 New state
+    const [promoting, setPromoting] = useState(false); 
     const [activeTab, setActiveTab] = useState('overview');
 
     // Form State
@@ -35,11 +35,13 @@ export default function BusinessDashboard() {
     useEffect(() => {
         async function fetchMyVenue() {
             if (!user) return;
+            
+            // 🟢 1. Use maybeSingle() to avoid 406 errors if empty
             const { data } = await supabase
                 .from('locations')
                 .select('*')
                 .eq('owner_id', user.id)
-                .single();
+                .maybeSingle();
 
             if (data) {
                 setVenue(data);
@@ -49,18 +51,21 @@ export default function BusinessDashboard() {
                     website: data.website || '',
                     phone: data.phone || ''
                 });
+                setLoading(false); // Only show page if we found a venue
+            } else {
+                // 🟢 2. SECURITY KICK: If no venue, leave immediately.
+                // We do NOT set loading(false) here, so the user sees the spinner 
+                // until the redirect completes. No "No Venue" screen flash.
+                toast.error("Access Restricted: Authorized Personnel Only.");
+                navigate('/');
             }
-            setLoading(false);
         }
         fetchMyVenue();
 
-        // 🟢 Check for Payment Success via URL
         if (searchParams.get('session_id')) {
             toast.success("Payment Successful! Your venue is being boosted.");
-            // In a real app, you'd confirm this with a webhook, 
-            // but this gives immediate feedback.
         }
-    }, [user, searchParams]);
+    }, [user, searchParams, navigate]);
 
     const handleUpdate = async (e) => {
         e.preventDefault();
@@ -86,7 +91,6 @@ export default function BusinessDashboard() {
         }
     };
 
-    // 🟢 3. THE PROMOTE FUNCTION
     const handlePromote = async () => {
         if (!venue) return;
         setPromoting(true);
@@ -96,13 +100,13 @@ export default function BusinessDashboard() {
                     price_id: STRIPE_PRICE_ID,
                     location_id: venue.id,
                     user_id: user.id,
-                    return_url: window.location.href // Redirect back here after paying
+                    return_url: window.location.href 
                 }
             });
 
             if (error) throw error;
             if (data?.url) {
-                window.location.href = data.url; // 🚀 Redirect to Stripe
+                window.location.href = data.url; 
             }
         } catch (error) {
             console.error(error);
@@ -112,20 +116,12 @@ export default function BusinessDashboard() {
         }
     };
 
+    // While loading (or redirecting), show spinner
     if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
 
-    if (!venue) {
-        return (
-            <div className="min-h-screen bg-slate-950 text-white p-6 flex flex-col items-center justify-center text-center">
-                <Store className="w-16 h-16 text-slate-700 mb-4" />
-                <h1 className="text-2xl font-bold mb-2">No Venue Found</h1>
-                <p className="text-slate-400 mb-8 max-w-xs">
-                    This account is not linked to a business. Please contact HiRL support to claim your venue.
-                </p>
-                <Button variant="outline" onClick={() => navigate('/')}>Return Home</Button>
-            </div>
-        );
-    }
+    // This fail-safe render is technically unreachable now due to the redirect, 
+    // but good to keep as a fallback.
+    if (!venue) return null;
 
     return (
         <div className="min-h-screen bg-slate-950 text-white p-6 pb-24">
@@ -169,7 +165,7 @@ export default function BusinessDashboard() {
                     <div className="space-y-6">
                         <VenueAnalytics locationId={venue.id} />
                         
-                        {/* 🟢 PROMOTION CARD */}
+                        {/* PROMOTION CARD */}
                         <div className="bg-gradient-to-br from-amber-900/40 to-slate-900 border border-amber-500/30 rounded-xl p-5 relative overflow-hidden">
                             {venue.is_promoted && (
                                 <div className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-bold px-2 py-1 rounded-bl-lg">

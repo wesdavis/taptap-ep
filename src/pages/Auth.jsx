@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Mail, Lock, User, Phone, Calendar, AtSign, KeyRound } from 'lucide-react';
+import { Loader2, ArrowLeft, Mail, Lock, User, Phone, Calendar, AtSign, KeyRound, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Auth() {
@@ -20,8 +20,9 @@ export default function Auth() {
   const [handle, setHandle] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState(''); 
+  const [interestedIn, setInterestedIn] = useState(''); // 🟢 NEW STATE
   const [birthdate, setBirthdate] = useState('');
-  const [otpCode, setOtpCode] = useState(''); // Stores the 6-digit code
+  const [otpCode, setOtpCode] = useState(''); 
 
   const isValidPassword = (pwd) => pwd.length >= 6;
 
@@ -56,18 +57,19 @@ export default function Auth() {
         setView('sign_in');
       } 
       
-      // 2. SIGN UP (Step 1: Create Account & Send OTP)
+      // 2. SIGN UP
       else if (view === 'sign_up') {
         // Validation
         if (!isValidPassword(password)) throw new Error("Password must be 6+ chars.");
-        if (!gender) throw new Error("Select gender.");
+        if (!gender) throw new Error("Select your gender.");
+        if (!interestedIn) throw new Error("Select who you are interested in."); // 🟢 VALIDATION
         if (!birthdate) throw new Error("Enter birthdate.");
         if (!handle) throw new Error("Choose a handle.");
         if (!phone) throw new Error("Phone number is required for verification.");
 
         const cleanHandle = handle.replace('@', '').toLowerCase();
 
-        // A. Create User (Email/Pass)
+        // A. Create User
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -76,7 +78,8 @@ export default function Auth() {
               full_name: fullName,
               display_name: fullName.split(' ')[0], 
               handle: cleanHandle,
-              gender: gender,
+              gender: gender, // Already lowercase from select
+              interested_in: interestedIn, // 🟢 SAVING PREFERENCE
               birthdate: birthdate,
               avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${cleanHandle}`
             },
@@ -84,23 +87,21 @@ export default function Auth() {
         });
         if (error) throw error;
 
-        // B. Trigger OTP (Add Phone to User)
-        // This automatically sends the SMS via Twilio if configured in Supabase
+        // B. Trigger OTP
         const { error: updateError } = await supabase.auth.updateUser({
            phone: phone
         });
         
         if (updateError) {
-            // If phone fails, we still have the user, but let's warn them
             console.error(updateError);
             throw new Error("Account created, but could not send SMS. Check number format.");
         }
 
         toast.success("Code sent! Check your phone.");
-        setView('verify_phone'); // ➡️ Move to Step 2
+        setView('verify_phone'); 
       } 
 
-      // 3. VERIFY PHONE OTP (Step 2 of Sign Up)
+      // 3. VERIFY PHONE OTP
       else if (view === 'verify_phone') {
          const { error } = await supabase.auth.verifyOtp({
             phone: phone,
@@ -111,10 +112,10 @@ export default function Auth() {
          if (error) throw error;
          
          toast.success("Phone verified! Welcome to TapTap.");
-         navigate('/'); // 🎉 Success!
+         window.location.href = '/'; // Hard reload to ensure profile loads
       }
       
-      // 4. SIGN IN (Normal)
+      // 4. SIGN IN
       else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -139,8 +140,6 @@ export default function Auth() {
        
        <div className="w-full max-w-md relative z-10 my-10">
           <div className="text-center mb-8">
-            
-            {/* Logo */}
             <div className="relative w-40 h-40 mx-auto mb-2">
                 <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-90" />
                 <img src="/logo-desert-bigger.png" alt="TapTap" className="relative w-full h-full object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.4)]" />
@@ -179,23 +178,33 @@ export default function Auth() {
                   <Input type="tel" placeholder="+1 (555) 000-0000" className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white" value={phone} onChange={(e) => setPhone(e.target.value)} required />
                 </div>
 
+                <div className="space-y-1 relative">
+                    <Calendar className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
+                    <Input type="date" className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white dark:[color-scheme:dark]" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} required />
+                </div>
+
+                {/* 🟢 GENDER & INTERESTS ROW */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="relative">
-                        <Calendar className="absolute left-3 top-3.5 w-5 h-5 text-slate-500" />
-                        <Input type="date" className="bg-slate-900/50 border-slate-800 h-12 pl-10 text-white dark:[color-scheme:dark]" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} required />
-                    </div>
-                    <div className="relative">
-                        <select className="w-full h-12 bg-slate-900/50 border border-slate-800 rounded-md text-white px-3 focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none" value={gender} onChange={(e) => setGender(e.target.value)} required>
-                            <option value="" disabled>Gender</option>
+                        <select className="w-full h-12 bg-slate-900/50 border border-slate-800 rounded-md text-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none" value={gender} onChange={(e) => setGender(e.target.value)} required>
+                            <option value="" disabled>I am a...</option>
                             <option value="male">Male</option>
                             <option value="female">Female</option>
+                        </select>
+                    </div>
+                    <div className="relative">
+                        <select className="w-full h-12 bg-slate-900/50 border border-slate-800 rounded-md text-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none" value={interestedIn} onChange={(e) => setInterestedIn(e.target.value)} required>
+                            <option value="" disabled>Interested in...</option>
+                            <option value="male">Men</option>
+                            <option value="female">Women</option>
+                            <option value="everyone">Everyone</option>
                         </select>
                     </div>
                 </div>
               </div>
             )}
 
-            {/* 🟢 VIEW: EMAIL/PASS (Shared by Sign In & Sign Up) */}
+            {/* 🟢 VIEW: EMAIL/PASS */}
             {view !== 'verify_phone' && (
              <div className="space-y-4">
                 <div className="relative">
@@ -211,7 +220,7 @@ export default function Auth() {
              </div>
             )}
 
-            {/* 🟢 VIEW: VERIFY OTP (Only shows after sign up success) */}
+            {/* 🟢 VIEW: VERIFY OTP */}
             {view === 'verify_phone' && (
                <div className="space-y-4 animate-in fade-in zoom-in duration-300">
                   <div className="relative">
@@ -240,7 +249,7 @@ export default function Auth() {
             </Button>
           </form>
 
-          {/* GOOGLE & TOGGLES (Hide during OTP verify) */}
+          {/* GOOGLE & TOGGLES */}
           {view !== 'verify_phone' && (
             <>
                 {view !== 'forgot_password' && (
