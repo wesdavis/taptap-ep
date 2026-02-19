@@ -12,7 +12,8 @@ import UserGrid from '@/components/location/UserGrid';
 import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Loader2, Navigation, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
+// 🟢 SECURE: Replaced hardcoded key with environment variable
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 // Helper: Calculate distance in miles
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
