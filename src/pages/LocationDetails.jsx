@@ -4,11 +4,11 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Camera, Crown, Calendar } from 'lucide-react';
 import UserGrid from '../components/location/UserGrid'; 
-import VenueAnalytics from '../components/business/VenueAnalytics'; // 🟢 NEW IMPORT
+import VenueAnalytics from '../components/business/VenueAnalytics';
 import { toast } from 'sonner';
 
-// 🟢 API KEY
-const GOOGLE_MAPS_API_KEY = "AIzaSyD6a6NR3DDmw15x2RgQcpV3NaBunD2ZYxk";
+// 🟢 Replaced hardcoded key with secure environment variable
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const LocationDetails = () => {
   const { id } = useParams(); 
@@ -22,7 +22,6 @@ const LocationDetails = () => {
   const [checkingLocation, setCheckingLocation] = useState(false);
   const [gridRefreshKey, setGridRefreshKey] = useState(0);
   
-  // 🟢 NEW: Admin State
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -51,7 +50,6 @@ const LocationDetails = () => {
              .maybeSingle();
            if (myCheckin) setCheckedIn(true);
 
-           // 🟢 Fetch Profile to check Admin Status
            const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
            if (profile?.is_admin) setIsAdmin(true);
         }
@@ -278,7 +276,7 @@ const LocationDetails = () => {
             )}
         </div>
 
-        {/* Map */}
+        {/* 🟢 FIXED: Map Iframe URL */}
         {location.google_place_id && (
           <div className="rounded-xl overflow-hidden border border-slate-800 h-40 w-full opacity-80 hover:opacity-100 transition">
             <iframe
@@ -302,7 +300,7 @@ const LocationDetails = () => {
             <LocationHistory locationId={id} />
         </div>
 
-        {/* 🟢 SHOW ANALYTICS IF ADMIN */}
+        {/* SHOW ANALYTICS IF ADMIN */}
         {isAdmin && (
             <div className="mt-8 animate-in slide-in-from-bottom-10 fade-in duration-500">
                 <VenueAnalytics locationId={id} />
