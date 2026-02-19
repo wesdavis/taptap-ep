@@ -7,7 +7,7 @@ import UserGrid from '../components/location/UserGrid';
 import VenueAnalytics from '../components/business/VenueAnalytics';
 import { toast } from 'sonner';
 
-// 🟢 Replaced hardcoded key with secure environment variable
+// 🟢 Securely load the API key from your Vercel/local environment variables
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const LocationDetails = () => {
@@ -276,11 +276,15 @@ const LocationDetails = () => {
             )}
         </div>
 
-        {/* 🟢 FIXED: Map Iframe URL */}
+        {/* 🟢 FIXED: The official Google Maps Embed API URL syntax */}
         {location.google_place_id && (
-          <div className="rounded-xl overflow-hidden border border-slate-800 h-40 w-full opacity-80 hover:opacity-100 transition">
+          <div className="rounded-xl overflow-hidden border border-slate-800 h-40 w-full opacity-80 hover:opacity-100 transition mt-6">
             <iframe
-              width="100%" height="100%" style={{ border: 0 }} loading="lazy"
+              width="100%" 
+              height="100%" 
+              style={{ border: 0 }} 
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
               src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=place_id:${location.google_place_id}`}
             ></iframe>
           </div>
