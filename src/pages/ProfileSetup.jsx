@@ -238,15 +238,15 @@ export default function ProfileSetup() {
             display_name: formData.full_name, 
             handle: cleanHandle,
             
-            // 🟢 PERSISTING HIDDEN FIELDS (Loaded from DB, saved back)
-            gender: formData.gender, 
-            birthdate: formData.birthdate, 
-            interested_in: formData.interested_in,
+            // 🟢 FIX: Send null instead of empty strings so the database doesn't crash
+            gender: formData.gender || null, 
+            birthdate: formData.birthdate || null, 
+            interested_in: formData.interested_in || null,
             
             // 🟢 NEW FIELDS
             location: formData.location,
             job_title: formData.job_title,
-            relationship_status: formData.relationship_status, 
+            relationship_status: formData.relationship_status || null, 
             
             bio: formData.bio,
             avatar_url: finalAvatar, 

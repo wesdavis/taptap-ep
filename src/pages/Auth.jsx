@@ -121,7 +121,17 @@ export default function Auth() {
       }
 
     } catch (error) {
-      toast.error(error.message);
+      console.error("Full Auth Error:", error);
+      
+      // Try to extract a readable message, otherwise fallback to a default
+      let errorMsg = error?.message || error?.error_description || "An unexpected error occurred.";
+      
+      // If it's still an empty object, it's likely an internal Supabase SMTP error
+      if (typeof errorMsg === 'object' || errorMsg === '{}') {
+          errorMsg = "Email failed to send. Check Supabase SMTP settings.";
+      }
+      
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
