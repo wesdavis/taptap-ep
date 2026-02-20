@@ -137,7 +137,7 @@ const Home = () => {
                 activeLoc.latitude, 
                 activeLoc.longitude
             );
-            if (dist > 0.5) {
+            if (dist > 0.15) {
                 console.log(`🚫 User is ${dist.toFixed(2)} miles away. Auto-Checking Out.`);
                 handleCheckOut(true); 
             }
@@ -177,7 +177,7 @@ const Home = () => {
         setCurrentCheckIn(null);
         setActiveMission(null); 
         if (isAutoEject) {
-            toast.warning("You left the venue. Automatically checked out.");
+            toast.warning("You left the venue. Automatically checking out.");
         } else {
             toast.success("Checked out successfully.");
         }
@@ -189,7 +189,7 @@ const Home = () => {
       if (!userCoords) { toast.error("Waiting for GPS..."); return; }
       const dist = calculateDistance(userCoords.latitude, userCoords.longitude, loc.latitude, loc.longitude);
       
-      if (dist > 0.5) { toast.error(`Too far! You are ${dist.toFixed(1)} miles away.`); return; }
+      if (dist > 0.1) { toast.error(`Too far! You are ${dist.toFixed(1)} miles away.`); return; }
       
       setCheckingInId(loc.id);
       try {

@@ -89,7 +89,7 @@ const LocationDetails = () => {
         const distKm = getDistanceFromLatLonInKm(userLat, userLon, location.latitude, location.longitude);
         const distMiles = distKm * 0.621371;
 
-        if (distMiles > 0.5) {
+        if (distMiles > 0.1) {
             toast.error(`Too far! You are ${distMiles.toFixed(1)} miles away.`);
             setCheckingLocation(false);
             return; 
