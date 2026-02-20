@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
-import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Camera, Crown, Calendar } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Loader2, Star, LogOut, Phone, Globe, Navigation, ChevronRight, Crown, Calendar } from 'lucide-react';
 import UserGrid from '../components/location/UserGrid'; 
 import VenueAnalytics from '../components/business/VenueAnalytics';
 import { toast } from 'sonner';
@@ -146,10 +146,9 @@ const LocationDetails = () => {
     }
   }
 
-  const heroImage = (location.google_photos && location.google_photos.length > 0)
-    ? `https://places.googleapis.com/v1/${location.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=800&maxWidthPx=1200`
-    : (location.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800");
-
+  // 🟢 FIXED: REMOVED EXPENSIVE GOOGLE PHOTOS API FOR HERO IMAGE
+  const heroImage = location.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800";
+  
   const isPromoted = location.is_promoted;
 
   return (
@@ -225,26 +224,7 @@ const LocationDetails = () => {
           </div>
         </div>
 
-        {/* Photos */}
-        {location.google_photos && location.google_photos.length > 0 && (
-          <div>
-            <h3 className="text-white font-bold mb-3 flex items-center gap-2">
-                <Camera className="w-4 h-4 text-amber-500" /> Vibe Check
-            </h3>
-            <div className="flex gap-3 overflow-x-auto pb-4 snap-x scrollbar-hide">
-                {location.google_photos.map((photoName, index) => (
-                    <div key={index} className="snap-center shrink-0 w-48 h-32 rounded-xl overflow-hidden border border-slate-800 relative">
-                        <img 
-                            src={`https://places.googleapis.com/v1/${photoName}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400`}
-                            alt="Venue Vibe"
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                        />
-                    </div>
-                ))}
-            </div>
-          </div>
-        )}
+        {/* 🟢 REMOVED EXPENSIVE GOOGLE PHOTOS CAROUSEL HERE */}
 
         {/* Check In Button */}
         <div className="w-full">
@@ -276,7 +256,7 @@ const LocationDetails = () => {
             )}
         </div>
 
-        {/* 🟢 FIXED: The official Google Maps Embed API URL syntax */}
+        {/* 🟢 FIXED: The official Google Maps Embed API URL syntax (Free Tier!) */}
         {location.google_place_id && (
           <div className="rounded-xl overflow-hidden border border-slate-800 h-40 w-full opacity-80 hover:opacity-100 transition mt-6">
             <iframe

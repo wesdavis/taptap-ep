@@ -335,7 +335,10 @@ const Home = () => {
                           </div>
                           <p className="text-amber-200/70 text-xs truncate italic">{promotedLocation.address}</p>
                       </div>
-                      <div className="relative w-16 h-16 shrink-0"><img src={(promotedLocation.google_photos && promotedLocation.google_photos.length > 0) ? `https://places.googleapis.com/v1/${promotedLocation.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400` : (promotedLocation.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400")} alt={promotedLocation.name} className="w-full h-full object-cover rounded-lg border border-amber-500/30" /></div>
+                      
+                      {/* 🟢 FIXED: REMOVED GOOGLE PLACES API FOR PROMOTED THUMBNAIL */}
+                      <div className="relative w-16 h-16 shrink-0"><img src={promotedLocation.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400"} alt={promotedLocation.name} className="w-full h-full object-cover rounded-lg border border-amber-500/30" /></div>
+                      
                       <ChevronRight className="w-4 h-4 text-amber-500 ml-2" />
                   </div>
                   <button onClick={(e) => handleQuickCheckIn(e, promotedLocation)} disabled={checkingInId === promotedLocation.id} className="mt-3 w-full py-2 bg-amber-500 text-black font-bold text-xs rounded-lg flex items-center justify-center gap-2 shadow-lg active:scale-95 transition hover:bg-amber-400 disabled:opacity-70">
@@ -345,7 +348,10 @@ const Home = () => {
           )}
 
           {otherLocations.slice(0, visibleCount).map((loc) => {
-              const imageUrl = (loc.google_photos && loc.google_photos.length > 0) ? `https://places.googleapis.com/v1/${loc.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=400&maxWidthPx=400` : (loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400");
+              
+              // 🟢 FIXED: REMOVED GOOGLE PLACES API FOR REGULAR THUMBNAILS
+              const imageUrl = loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400";
+              
               const count = activeUsersAtLocation[loc.id] || 0;
               const vibe = getPartyVibe(count);
               return (
@@ -399,8 +405,9 @@ const Home = () => {
                      ) : (
                          visitedPlaces.map(place => (
                              <div key={place.id} onClick={() => navigate(`/location/${place.id}`)} className="flex items-center gap-3 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 transition cursor-pointer">
+                                 {/* 🟢 FIXED: REMOVED EXPENSIVE GOOGLE PHOTOS API HERE TOO */}
                                  <img 
-                                    src={place.google_photos?.[0] ? `https://places.googleapis.com/v1/${place.google_photos[0]}/media?key=${GOOGLE_MAPS_API_KEY}&maxHeightPx=100&maxWidthPx=100` : (place.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=100")} 
+                                    src={place.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=100"} 
                                     className="w-10 h-10 rounded-md object-cover" 
                                  />
                                  <div className="flex-1 min-w-0">

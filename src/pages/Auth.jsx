@@ -218,7 +218,7 @@ export default function Auth() {
                             <option value="" disabled>Interested in...</option>
                             <option value="male">Men</option>
                             <option value="female">Women</option>
-                            <option value="everyone">Everyone</option>
+                            
                         </select>
                     </div>
                 </div>
