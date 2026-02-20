@@ -109,9 +109,9 @@ export default function UserGrid({ locationId }) {
         } catch (e) { console.log("Grid fetch error:", e); } finally { setLoading(false); }
     }
 
-    // 🟢 FIX: STRICT GENDER RULES
+    // 🟢 FIX: STRICT GENDER RULES (case insensitive)
     const canTapUser = (targetGender) => {
-        // 1. Get my gender safely (lowercase)
+        // 1. Get genders safely in lowercase
         const myGender = (myProfile?.gender || '').toLowerCase();
         const theirGender = (targetGender || '').toLowerCase();
 
@@ -121,12 +121,12 @@ export default function UserGrid({ locationId }) {
         }
 
         // 3. RULE: Must match my "Interested In" preference
-        const interest = myProfile.interested_in; 
+        const interest = (myProfile?.interested_in || '').toLowerCase(); 
         if (!interest) return false; 
 
-        if (interest === "Everyone") return true; 
-        if (interest === "Male" && theirGender === 'male') return true;
-        if (interest === "Female" && theirGender === 'female') return true;
+        if (interest === "everyone") return false; 
+        if (interest === "male" && theirGender === 'male') return true;
+        if (interest === "female" && theirGender === 'female') return true;
         
         return false;
     };
@@ -263,8 +263,8 @@ export default function UserGrid({ locationId }) {
                                         ) : (
                                             // Optional: Show "Locked" shield for men looking at women
                                             // Only show this if preferences match but gender blocks it (to avoid clutter)
-                                            (myProfile?.gender === 'Male' && profile?.gender === 'Female') && (
-                                                <div className="bg-slate-800/80 rounded-full p-1 border border-slate-700">
+                                            ((myProfile?.gender || '').toLowerCase() === 'male' && (profile?.gender || '').toLowerCase() === 'female') && (
+                                                <div className="bg-slate-800/80 rounded-full p-1 border border-slate-700 shadow-lg" title="Women message first">
                                                      <Shield className="w-3 h-3 text-slate-500" />
                                                 </div>
                                             )
