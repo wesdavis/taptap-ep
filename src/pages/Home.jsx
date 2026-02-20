@@ -263,7 +263,7 @@ const Home = () => {
           
           {/* 🟢 NEW: App Logo in Top Left */}
           <img 
-              src="/logo-desert.png" 
+              src="/logo-desert-bigger.png" 
               alt="TapTap" 
               className="absolute top-6 left-6 w-28 h-auto drop-shadow-2xl z-50 pointer-events-none" 
           />
@@ -286,11 +286,28 @@ const Home = () => {
           <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-center text-center z-10">
               <h1 onClick={() => navigate(`/user/${user?.id}`)} className="text-4xl font-black text-white tracking-tight drop-shadow-lg cursor-pointer">{profile?.display_name || "Explorer"}</h1>
               <p className="text-amber-400 text-lg font-bold tracking-wide drop-shadow-md mb-4">@{profile?.handle || "user"}</p>
+              
               <div className="flex items-center gap-3">
-                  <div className="bg-black/40 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg"><Trophy className="w-4 h-4 text-yellow-400 fill-yellow-400" /><span className="text-sm font-bold text-white">{profile?.xp || 0} XP</span></div>
-                  <button onClick={(e) => { e.stopPropagation(); navigate('/profile-setup'); }} className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full flex items-center gap-2 hover:bg-white/20 transition active:scale-95 shadow-lg"><Edit3 className="w-4 h-4 text-white" /><span className="text-sm font-bold text-white">Edit Profile</span></button>
+                  {/* 🟢 UPGRADED: XP Button is larger, glowing, and links to Achievements */}
+                  <button 
+                      onClick={(e) => { e.stopPropagation(); navigate('/achievements'); }} 
+                      className="bg-black/60 backdrop-blur-md border border-yellow-500/30 px-5 py-2.5 rounded-full flex items-center gap-2 shadow-lg shadow-yellow-500/20 hover:bg-black/80 hover:border-yellow-500/50 transition active:scale-95 cursor-pointer"
+                  >
+                      <Trophy className="w-5 h-5 text-yellow-400 fill-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                      <span className="text-base font-black text-white drop-shadow-md">{profile?.xp || 0} XP</span>
+                  </button>
+
+                  <button 
+                      onClick={(e) => { e.stopPropagation(); navigate('/profile-setup'); }} 
+                      className="bg-white/10 backdrop-blur-md border border-white/20 px-5 py-2.5 rounded-full flex items-center gap-2 hover:bg-white/20 transition active:scale-95 shadow-lg"
+                  >
+                      <Edit3 className="w-4 h-4 text-white" />
+                      <span className="text-sm font-bold text-white">Edit</span>
+                  </button>
               </div>
+              <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition active:scale-95 shadow-lg"><SettingsIcon className="w-5 h-5" /></button>
           </div>
+          
         </div>
 
         {activeMission && (
@@ -299,6 +316,7 @@ const Home = () => {
                   ping={activeMission} 
                   onConfirm={(idToDismiss) => { 
                       setActiveMission(null); 
+                      loadPings(); // 🟢 LEAD DEV FIX: Instantly check the queue for the next mission!
                   }} 
                /> 
             </div>
