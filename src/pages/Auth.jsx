@@ -16,7 +16,7 @@ export default function Auth() {
   // Form Data
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState(''); // 🟢 NEW STATE
+  const [confirmPassword, setConfirmPassword] = useState(''); 
   const [fullName, setFullName] = useState('');
   const [handle, setHandle] = useState('');
   const [phone, setPhone] = useState('');
@@ -62,7 +62,7 @@ export default function Auth() {
       else if (view === 'sign_up') {
         // Validation
         if (!isValidPassword(password)) throw new Error("Password must be 6+ chars.");
-        if (password !== confirmPassword) throw new Error("Passwords do not match."); // 🟢 CHECK MATCH
+        if (password !== confirmPassword) throw new Error("Passwords do not match."); 
         
         if (!gender) throw new Error("Select your gender.");
         if (!interestedIn) throw new Error("Select who you are interested in.");
@@ -90,6 +90,14 @@ export default function Auth() {
           },
         });
         
+        // 🟢 LIMBO RESCUE #1: They tried to sign up again
+        if (error && error.message.toLowerCase().includes('already registered')) {
+            toast.error("You already started an account! Let's finish verifying it.");
+            await supabase.auth.resend({ type: 'signup', email });
+            setView('verify_email');
+            setLoading(false);
+            return;
+        }
         if (error) throw error;
 
         toast.success("Account created! Check your email for the code.");
@@ -116,7 +124,17 @@ export default function Auth() {
           email,
           password,
         });
+        
+        // 🟢 LIMBO RESCUE #2: They tried to log in but never verified
+        if (error && error.message.toLowerCase().includes('email not confirmed')) {
+            toast.error("Please finish verifying your email! We sent a new code.");
+            await supabase.auth.resend({ type: 'signup', email });
+            setView('verify_email');
+            setLoading(false);
+            return;
+        }
         if (error) throw error;
+        
         navigate('/');
       }
 
