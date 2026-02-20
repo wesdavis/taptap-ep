@@ -109,11 +109,11 @@ export default function UserGrid({ locationId }) {
         } catch (e) { console.log("Grid fetch error:", e); } finally { setLoading(false); }
     }
 
-    // 🟢 FIX: STRICT GENDER RULES (case insensitive)
+    // 🟢 FIX: STRICT GENDER RULES (Whitespace & Case-insensitive)
     const canTapUser = (targetGender) => {
-        // 1. Get genders safely in lowercase
-        const myGender = (myProfile?.gender || '').toLowerCase();
-        const theirGender = (targetGender || '').toLowerCase();
+        // 1. Get genders safely (strip spaces and make lowercase)
+        const myGender = (myProfile?.gender || '').trim().toLowerCase();
+        const theirGender = (targetGender || '').trim().toLowerCase();
 
         // 2. RULE: Men CANNOT tap Women
         if (myGender === 'male' && theirGender === 'female') {
@@ -121,16 +121,17 @@ export default function UserGrid({ locationId }) {
         }
 
         // 3. RULE: Must match my "Interested In" preference
-        const interest = (myProfile?.interested_in || '').toLowerCase(); 
+        const interest = (myProfile?.interested_in || '').trim().toLowerCase(); 
+        
+        // If the database has no preference saved for me, I can't tap anyone
         if (!interest) return false; 
 
-        if (interest === "everyone") return false; 
+        if (interest === "everyone") return true; 
         if (interest === "male" && theirGender === 'male') return true;
         if (interest === "female" && theirGender === 'female') return true;
         
         return false;
     };
-
     const initiateTap = (e, targetUserId, targetName) => {
         e.stopPropagation();
         setSelectedTarget({ id: targetUserId, name: targetName });
