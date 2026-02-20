@@ -12,9 +12,6 @@ import UserGrid from '@/components/location/UserGrid';
 import { User, MapPin, Star, ChevronRight, Trophy, LogOut, Edit3, Crown, Users, Map as MapIcon, Loader2, Navigation, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
-// 🟢 SECURE: Replaced hardcoded key with environment variable
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
 // Helper: Calculate distance in miles
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity; 
@@ -229,7 +226,7 @@ const Home = () => {
   const promotedLocation = sortedLocations.find(l => l.is_promoted === true);
   const otherLocations = promotedLocation ? sortedLocations.filter(l => l.id !== promotedLocation.id) : sortedLocations;
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500">Loading...</div>;
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-amber-500"><Loader2 className="w-8 h-8 animate-spin" /></div>;
 
   return (
     <div className="pb-24 bg-slate-950 min-h-screen text-white relative"> 
@@ -238,19 +235,17 @@ const Home = () => {
       <div 
         className="fixed inset-0 z-0 pointer-events-none"
         style={{
-          // 🟢 REPLACE 'el-paso-star.jpg' with your actual file name in public folder
           backgroundImage: `url('/el-paso-star.jpg')`, 
           backgroundSize: '100% auto',
           backgroundPosition: 'center',
-          backgroundAttachment: 'fixed', // This makes it static while you scroll
-          opacity: 0.4 // Adjust visibility
+          backgroundAttachment: 'fixed',
+          opacity: 0.4 
         }}
       />
-      {/* 🟢 VIGNETTE OVERLAY (Dark edges, clear center) */}
+      {/* 🟢 VIGNETTE OVERLAY */}
       <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,#020617_90%)]" />
 
-
-      {/* CONTENT (Z-Index 10 ensures it sits ON TOP of the background) */}
+      {/* CONTENT */}
       <div className="relative z-10">
       
         {receivedPings.length > 0 && (
@@ -265,6 +260,22 @@ const Home = () => {
 
         {/* HEADER */}
         <div className="relative w-full h-[45vh] min-h-[400px] bg-transparent rounded-b-[3rem] overflow-hidden shadow-2xl mb-8 group">
+          
+          {/* 🟢 NEW: App Logo in Top Left */}
+          <img 
+              src="/logo-desert.png" 
+              alt="TapTap" 
+              className="absolute top-6 left-6 w-28 h-auto drop-shadow-2xl z-50 pointer-events-none" 
+          />
+
+          {/* 🟢 NEW: Larger, easier-to-tap Settings Gear */}
+          <button 
+              onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} 
+              className="absolute top-6 right-6 p-3 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition active:scale-95 shadow-lg"
+          >
+              <SettingsIcon className="w-6 h-6" />
+          </button> 
+
           {profile?.avatar_url ? (
               <img src={profile.avatar_url} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80" onClick={() => navigate(`/user/${user?.id}`)} alt="Profile" />
           ) : ( <div className="absolute inset-0 bg-slate-800/50 flex items-center justify-center"><User className="w-24 h-24 text-slate-600" /></div> )}
@@ -280,7 +291,6 @@ const Home = () => {
                   <button onClick={(e) => { e.stopPropagation(); navigate('/profile-setup'); }} className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full flex items-center gap-2 hover:bg-white/20 transition active:scale-95 shadow-lg"><Edit3 className="w-4 h-4 text-white" /><span className="text-sm font-bold text-white">Edit Profile</span></button>
               </div>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); navigate('/settings'); }} className="absolute top-6 right-6 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 hover:text-white z-50 transition"><SettingsIcon className="w-5 h-5" /></button> 
         </div>
 
         {activeMission && (
@@ -336,7 +346,7 @@ const Home = () => {
                           <p className="text-amber-200/70 text-xs truncate italic">{promotedLocation.address}</p>
                       </div>
                       
-                      {/* 🟢 FIXED: REMOVED GOOGLE PLACES API FOR PROMOTED THUMBNAIL */}
+                      {/* 🟢 SECURE: Database or Unsplash image only! */}
                       <div className="relative w-16 h-16 shrink-0"><img src={promotedLocation.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400"} alt={promotedLocation.name} className="w-full h-full object-cover rounded-lg border border-amber-500/30" /></div>
                       
                       <ChevronRight className="w-4 h-4 text-amber-500 ml-2" />
@@ -349,7 +359,7 @@ const Home = () => {
 
           {otherLocations.slice(0, visibleCount).map((loc) => {
               
-              // 🟢 FIXED: REMOVED GOOGLE PLACES API FOR REGULAR THUMBNAILS
+              // 🟢 SECURE: Database or Unsplash image only!
               const imageUrl = loc.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400";
               
               const count = activeUsersAtLocation[loc.id] || 0;
@@ -405,11 +415,13 @@ const Home = () => {
                      ) : (
                          visitedPlaces.map(place => (
                              <div key={place.id} onClick={() => navigate(`/location/${place.id}`)} className="flex items-center gap-3 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 transition cursor-pointer">
-                                 {/* 🟢 FIXED: REMOVED EXPENSIVE GOOGLE PHOTOS API HERE TOO */}
+                                 
+                                 {/* 🟢 SECURE: Database or Unsplash image only! */}
                                  <img 
                                     src={place.image_url || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=100"} 
                                     className="w-10 h-10 rounded-md object-cover" 
                                  />
+                                 
                                  <div className="flex-1 min-w-0">
                                      <p className="text-sm font-bold text-white truncate">{place.name}</p>
                                      <p className="text-[10px] text-slate-500 truncate">{place.address}</p>

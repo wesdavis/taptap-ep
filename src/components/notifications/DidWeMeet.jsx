@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown, User, Loader2 } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, User, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function DidWeMeet({ ping, onConfirm }) {
@@ -36,10 +36,12 @@ export default function DidWeMeet({ ping, onConfirm }) {
             if (confirmed) {
                 try {
                     await supabase.rpc('increment_xp', { user_id: ping.from_user_id, amount: 10 });
+                    // Also give the receiver XP for completing the loop!
+                    await supabase.rpc('increment_xp', { user_id: ping.to_user_id, amount: 10 });
                     toast.success("Connection confirmed! +10 XP");
                 } catch (e) { console.log("XP Update skipped"); }
             } else {
-                toast.info("No worries.");
+                toast.info("No worries. Mission cleared.");
             }
 
             setTimeout(() => {
@@ -55,53 +57,68 @@ export default function DidWeMeet({ ping, onConfirm }) {
     };
 
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg animate-in slide-in-from-top-2 relative z-30">
-            <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-bold flex items-center gap-2">
-                    It's time to say hello...
-                </h3>
-                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
-                    {new Date(ping.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </span>
-            </div>
+        // 🟢 FULL SCREEN OVERLAY
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
             
-            <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden shrink-0 border border-slate-700">
-                    {otherUser?.avatar_url ? (
-                        <img src={otherUser.avatar_url} className="w-full h-full object-cover" alt="Sender" />
-                    ) : (
-                        <div className="flex items-center justify-center w-full h-full"><User className="w-5 h-5 text-slate-500" /></div>
-                    )}
-                </div>
-                <div>
-                    <p className="text-sm text-slate-300">
-                        Did you meet <span className="text-white font-bold">@{otherUser?.handle || 'User'}</span>
-                    </p>
-                    <p className="text-xs text-slate-500 italic">
-                        {ping.locations?.name || "at this location"}
-                    </p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-                <Button 
-                    variant="outline" 
-                    onClick={() => handleConfirm(false)}
-                    disabled={loading}
-                    className="border-slate-700 text-slate-400 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
-                >
-                    {status === 'denying' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsDown className="w-4 h-4 mr-2" />}
-                    No
-                </Button>
+            {/* 🟢 MODAL CARD */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] w-full max-w-sm animate-in zoom-in-95 duration-300 relative overflow-hidden">
                 
-                <Button 
-                    onClick={() => handleConfirm(true)}
-                    disabled={loading}
-                    className="bg-green-600 hover:bg-green-500 text-white font-bold"
-                >
-                    {status === 'confirming' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4 mr-2" />}
-                    Yes
-                </Button>
+                {/* Subtle background glow */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-amber-500/10 blur-3xl rounded-full pointer-events-none"></div>
+
+                <div className="flex items-center justify-between mb-5 relative z-10">
+                    <h3 className="text-white font-black text-lg flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                        Mission Update
+                    </h3>
+                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full uppercase font-bold tracking-wider border border-slate-700">
+                        Action Required
+                    </span>
+                </div>
+                
+                <div className="flex items-center gap-4 mb-6 relative z-10 bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50">
+                    <div className="w-14 h-14 rounded-full bg-slate-800 overflow-hidden shrink-0 border-2 border-slate-700 shadow-lg">
+                        {otherUser?.avatar_url ? (
+                            <img src={otherUser.avatar_url} className="w-full h-full object-cover" alt="Sender" />
+                        ) : (
+                            <div className="flex items-center justify-center w-full h-full"><User className="w-6 h-6 text-slate-500" /></div>
+                        )}
+                    </div>
+                    <div>
+                        <p className="text-sm text-slate-400 mb-0.5">
+                            Did you meet face-to-face?
+                        </p>
+                        <p className="text-base text-white font-black">
+                            @{otherUser?.handle || 'User'}
+                        </p>
+                        {ping.locations?.name && (
+                            <p className="text-[10px] text-amber-500/80 font-bold uppercase tracking-wider mt-1">
+                                📍 {ping.locations.name}
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 relative z-10">
+                    <Button 
+                        variant="outline" 
+                        onClick={() => handleConfirm(false)}
+                        disabled={loading}
+                        className="border-slate-700 bg-slate-900/50 text-slate-400 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/50 py-6 rounded-xl transition-all"
+                    >
+                        {status === 'denying' ? <Loader2 className="w-5 h-5 animate-spin" /> : <ThumbsDown className="w-5 h-5 mr-2" />}
+                        No
+                    </Button>
+                    
+                    <Button 
+                        onClick={() => handleConfirm(true)}
+                        disabled={loading}
+                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-black font-black py-6 rounded-xl border-none shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all"
+                    >
+                        {status === 'confirming' ? <Loader2 className="w-5 h-5 animate-spin" /> : <ThumbsUp className="w-5 h-5 mr-2" />}
+                        Yes
+                    </Button>
+                </div>
             </div>
         </div>
     );

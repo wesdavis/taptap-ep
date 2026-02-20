@@ -4,8 +4,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, 
   AreaChart, Area, PieChart, Pie, Cell, Legend, CartesianGrid 
 } from 'recharts';
-import { Users, TrendingUp, Heart, Activity, Calendar, Clock, ArrowLeftRight, Repeat } from 'lucide-react';
+import { Users, TrendingUp, Heart, Activity, Calendar, Clock, ArrowLeftRight, Repeat, Hourglass } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 
 const COLORS = ['#f59e0b', '#3b82f6', '#ec4899', '#10b981']; 
 
@@ -23,11 +24,12 @@ export default function VenueAnalytics({ locationId }) {
         malePct: 0,
         femalePct: 0,
         newCustomers: 0,
-        returningCustomers: 0
+        returningCustomers: 0,
+        avgDwellText: '0m' // 🟢 NEW: Average time spent
     });
     
     const [chartData, setChartData] = useState([]); 
-    const [demographics, setDemographics] = useState({ age: [], status: [], loyalty: [] });
+    const [demographics, setDemographics] = useState({ age: [], status: [], loyalty: [], dwellBuckets: [] });
 
     useEffect(() => {
         if (locationId) {
@@ -41,31 +43,39 @@ export default function VenueAnalytics({ locationId }) {
     }, [locationId, view]);
 
     const fetchData = async () => {
-        // 1. Fetch THIS WEEK'S Checkins (Strictly for this location)
+        // 1. Fetch THIS WEEK'S Checkins
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 7);
 
-        const { data: recentCheckins } = await supabase
+        const { data: recentCheckins, error: checkinError } = await supabase
             .from('checkins')
             .select(`*, profiles(birth_date, relationship_status, gender)`)
-            .eq('location_id', locationId) // 🔒 STRICT FILTER
+            .eq('location_id', locationId) 
             .gte('created_at', sinceDate.toISOString());
 
+        // 🟢 LEAD DEV FIX: Catch errors so it doesn't fail silently
+        if (checkinError) {
+            console.error("🚨 Supabase Error fetching checkins:", checkinError.message);
+            toast.error("Failed to load analytics data.");
+            setLoading(false);
+            return;
+        }
+
         // 2. FETCH HISTORY (To determine Loyalty)
-        // Get unique User IDs from this week to check their history
         const userIds = recentCheckins?.map(c => c.user_id) || [];
         const uniqueUserIds = [...new Set(userIds)];
         
-        let loyaltyMap = {}; // { userId: true/false } (true = returning)
+        let loyaltyMap = {}; 
 
         if (uniqueUserIds.length > 0) {
-            // Ask DB: "Have these specific users been at THIS location BEFORE 7 days ago?"
-            const { data: history } = await supabase
+            const { data: history, error: historyError } = await supabase
                 .from('checkins')
                 .select('user_id')
                 .eq('location_id', locationId)
                 .in('user_id', uniqueUserIds)
-                .lt('created_at', sinceDate.toISOString()); // Older than this week
+                .lt('created_at', sinceDate.toISOString()); 
+
+            if (historyError) console.error("🚨 Supabase Error fetching history:", historyError.message);
 
             const returningSet = new Set(history?.map(h => h.user_id));
             uniqueUserIds.forEach(id => {
@@ -84,24 +94,45 @@ export default function VenueAnalytics({ locationId }) {
         // KPI CALCULATIONS
         const live = data.filter(c => c.is_active).length;
         const today = data.filter(c => new Date(c.created_at).toDateString() === todayStr).length;
-        const weekTotal = data.length; // Total VISITS (volume)
+        const weekTotal = data.length; 
 
-        // Gender (Counted by Visits to show volume)
+        // Gender Calculation
         let m = 0, f = 0;
         data.forEach(c => {
-            if (c.profiles?.gender === 'Male') m++;
-            if (c.profiles?.gender === 'Female') f++;
+            if (c.profiles?.gender === 'Male' || c.profiles?.gender?.toLowerCase() === 'male') m++;
+            if (c.profiles?.gender === 'Female' || c.profiles?.gender?.toLowerCase() === 'female') f++;
         });
         const totalGen = m + f;
 
-        // 🟢 LOYALTY CALCULATION (Fixed: Counting UNIQUE HUMANS)
+        // Loyalty Calculation
         let uniqueNew = 0;
         let uniqueRet = 0;
-        
         uniqueUserIds.forEach(id => {
-            if (loyaltyMap[id]) uniqueRet++; // They have been here before
-            else uniqueNew++; // First time ever seeing them
+            if (loyaltyMap[id]) uniqueRet++; 
+            else uniqueNew++; 
         });
+
+        // 🟢 NEW: DWELL TIME CALCULATIONS
+        // Only measure visits that are finished and have a valid updated_at timestamp
+        const completedVisits = data.filter(c => !c.is_active && c.updated_at && c.updated_at !== c.created_at);
+        
+        let totalMinutes = 0;
+        const dwellBuckets = { '< 30m': 0, '1 hr': 0, '2 hrs': 0, '3+ hrs': 0 };
+
+        completedVisits.forEach(c => {
+            const diffMs = new Date(c.updated_at) - new Date(c.created_at);
+            const diffMins = diffMs / 1000 / 60;
+            totalMinutes += diffMins;
+
+            if (diffMins < 30) dwellBuckets['< 30m']++;
+            else if (diffMins < 90) dwellBuckets['1 hr']++;
+            else if (diffMins < 150) dwellBuckets['2 hrs']++;
+            else dwellBuckets['3+ hrs']++;
+        });
+
+        const avgMins = completedVisits.length > 0 ? Math.round(totalMinutes / completedVisits.length) : 0;
+        const avgDwellText = avgMins > 60 ? `${Math.floor(avgMins/60)}h ${avgMins%60}m` : `${avgMins}m`;
+
 
         // VIEW LOGIC (Today vs Week)
         let mainChart = [];
@@ -158,7 +189,8 @@ export default function VenueAnalytics({ locationId }) {
             peakHour: peakH, busiestDay: busyDay, 
             malePct: totalGen ? Math.round((m/totalGen)*100) : 0, 
             femalePct: totalGen ? Math.round((f/totalGen)*100) : 0,
-            newCustomers: uniqueNew, returningCustomers: uniqueRet
+            newCustomers: uniqueNew, returningCustomers: uniqueRet,
+            avgDwellText // 🟢 Saved to state
         });
         setChartData(mainChart);
         setDemographics({
@@ -167,7 +199,9 @@ export default function VenueAnalytics({ locationId }) {
             loyalty: [
                 { name: 'New Faces', value: uniqueNew },
                 { name: 'Regulars', value: uniqueRet }
-            ]
+            ],
+            // 🟢 Chart data for dwell time
+            dwellBuckets: Object.keys(dwellBuckets).map(k => ({ name: k, users: dwellBuckets[k] }))
         });
     };
 
@@ -196,7 +230,7 @@ export default function VenueAnalytics({ locationId }) {
                     { label: view === 'today' ? 'Peak Hour' : 'Busiest Day', val: view === 'today' ? stats.peakHour : stats.busiestDay, icon: view==='today'?Clock:Calendar, color: 'text-amber-500' },
                     { label: 'New Faces', val: stats.newCustomers, icon: Repeat, color: 'text-purple-500' }
                 ].map((kpi, i) => (
-                    <motion.div key={i} whileHover={{ scale: 1.02 }} className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                    <motion.div key={i} whileHover={{ scale: 1.02 }} className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg">
                         <div className={`${kpi.color} text-[10px] uppercase font-bold flex items-center gap-1`}>
                             <kpi.icon className="w-3 h-3"/> {kpi.label}
                         </div>
@@ -206,7 +240,7 @@ export default function VenueAnalytics({ locationId }) {
             </div>
 
             {/* 3. MAIN CHART */}
-            <motion.div layout className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+            <motion.div layout className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-lg">
                 <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-amber-500" /> {view === 'today' ? 'Hourly Traffic' : 'Daily Traffic'}
                 </h3>
@@ -241,7 +275,7 @@ export default function VenueAnalytics({ locationId }) {
 
             {/* 4. DEMOGRAPHICS & LOYALTY */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-6">
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-6 shadow-lg">
                     <div>
                         <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
                             <ArrowLeftRight className="w-4 h-4 text-purple-500" /> Gender Split
@@ -272,7 +306,7 @@ export default function VenueAnalytics({ locationId }) {
                     </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col">
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col shadow-lg">
                     <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
                         <Repeat className="w-4 h-4 text-emerald-500" /> Customer Loyalty
                     </h3>
@@ -294,6 +328,38 @@ export default function VenueAnalytics({ locationId }) {
                     </div>
                 </div>
             </div>
+
+            {/* 🟢 5. NEW DWELL TIME SECTION */}
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-lg mt-4">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Hourglass className="w-4 h-4 text-amber-500" /> Session Length
+                    </h3>
+                    <div className="text-right">
+                        <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Average Time</p>
+                        <p className="text-xl font-black text-amber-500">{stats.avgDwellText}</p>
+                    </div>
+                </div>
+                
+                <div className="h-40 w-full">
+                    {demographics.dwellBuckets.some(b => b.users > 0) ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={demographics.dwellBuckets}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <XAxis dataKey="name" tick={{fontSize: 10, fill: '#64748b'}} />
+                                <YAxis tick={{fontSize: 10, fill: '#64748b'}} allowDecimals={false} />
+                                <RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff'}} />
+                                <Bar dataKey="users" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={40} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-slate-500">
+                            Checkouts required to calculate dwell time
+                        </div>
+                    )}
+                </div>
+            </div>
+
         </motion.div>
     );
 }
