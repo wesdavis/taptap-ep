@@ -73,9 +73,10 @@ export default function UserGrid({ locationId }) {
 
     async function fetchUsersAndStatus() {
         try {
+            // 🟢 FIXED: Removed the invalid ':user_id' alias from the select statement!
             const { data: activeUsers, error } = await supabase
                 .from('checkins')
-                .select(`user_id, profiles:user_id ( id, display_name, full_name, avatar_url, gender )`)
+                .select(`user_id, profiles ( id, display_name, full_name, avatar_url, gender )`)
                 .eq('location_id', locationId)
                 .eq('is_active', true);
             

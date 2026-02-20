@@ -7,7 +7,7 @@ import OneSignal from 'react-onesignal';
 
 // Components & Pages
 import GlobalNotificationLayer from './components/GlobalNotificationLayer'; 
-import Splash from './components/ui/Splash'; // 🟢 NEW IMPORT
+import Splash from './components/ui/Splash'; 
 import Home from './pages/Home';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
@@ -20,7 +20,6 @@ import BusinessDashboard from './pages/BusinessDashboard';
 import { supabase } from '@/lib/supabase';
 import AdminDashboard from './pages/AdminDashboard';
 import UpdatePassword from '@/pages/UpdatePassword'; 
-
 
 const queryClient = new QueryClient();
 
@@ -35,11 +34,10 @@ const PageNotFound = () => (
 
 const AuthenticatedApp = () => {
   const { user, loading, profileMissing, logout } = useAuth();
-  const [splashDone, setSplashDone] = useState(false); // 🟢 STATE FOR SPLASH DELAY
+  const [splashDone, setSplashDone] = useState(false); 
   const timerRef = useRef(null);
 
   // 🟢 1. SPLASH SCREEN TIMER
-  // Forces the splash screen to stay visible for at least 2.5 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
       setSplashDone(true);
@@ -54,7 +52,6 @@ const AuthenticatedApp = () => {
     const handleIdleLogout = async () => {
       console.log("💤 User idle. Auto-logging out...");
       
-      // A. Ghostbuster: Check out of location
       try {
         await supabase
           .from('checkins')
@@ -62,7 +59,6 @@ const AuthenticatedApp = () => {
           .eq('user_id', user.id);
       } catch (err) { console.error("Error clearing checkin:", err); }
 
-      // B. Sign Out
       if (logout) await logout();
       toast("You were logged out due to inactivity.");
     };
@@ -72,16 +68,11 @@ const AuthenticatedApp = () => {
       timerRef.current = setTimeout(handleIdleLogout, IDLE_TIMEOUT_MS);
     };
 
-    // Events to watch for activity
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    
-    // Attach listeners
     events.forEach(event => document.addEventListener(event, resetTimer));
     
-    // Start the timer immediately
     resetTimer();
 
-    // Cleanup listeners on unmount
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       events.forEach(event => document.removeEventListener(event, resetTimer));
@@ -89,54 +80,62 @@ const AuthenticatedApp = () => {
   }, [user, logout]);
 
 
-  // 🟢 3. ONESIGNAL INIT LOGIC
+  // 🟢 3. ONESIGNAL INIT LOGIC (FIXED)
   useEffect(() => {
-    // 🛡️ Guard: Only run if user exists AND OneSignal hasn't started yet
     if (user && !window.OneSignalInitialized) {
-      window.OneSignalInitialized = true; // 🚩 Set flag immediately
+      window.OneSignalInitialized = true; 
 
-      // Use window.OneSignal to access the loaded library
-      window.OneSignal = window.OneSignal || [];
-      
-      // Initialize via the global object if React wrapper fails or creates dupes
-      OneSignal.init({
-        appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", 
-        allowLocalhostAsSecureOrigin: true,
-      }).then(async () => {
-        console.log("OneSignal Initialized");
+      const setupOneSignal = async () => {
+        try {
+          // 1. Wait for init to completely finish
+          await OneSignal.init({
+            appId: "d973eb4b-43b6-4608-aa45-70723fdd18c4", 
+            allowLocalhostAsSecureOrigin: true,
+          });
+          console.log("✅ OneSignal Initialized");
 
-        // Login the user
-        await OneSignal.login(user.id);
+          // 2. Login the user
+          await OneSignal.login(user.id);
 
-        // Force Save ID
-        const currentId = OneSignal.User.PushSubscription.id;
-        if (currentId) {
-            console.log("Found existing OneSignal ID:", currentId);
-            const { error } = await supabase
-                .from('profiles')
-                .update({ onesignal_id: currentId })
-                .eq('id', user.id);
-            if (error) console.error("Error saving ID:", error);
+          // 3. Ensure the object exists before reading it!
+          if (OneSignal.User && OneSignal.User.PushSubscription) {
+              const currentId = OneSignal.User.PushSubscription.id;
+              
+              if (currentId) {
+                  console.log("Found existing OneSignal ID:", currentId);
+                  await supabase
+                      .from('profiles')
+                      .update({ onesignal_id: currentId })
+                      .eq('id', user.id);
+              }
+
+              // 4. Safely attach listener AFTER everything is loaded
+              OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+                  if (event.current.id) {
+                      console.log("New OneSignal ID detected:", event.current.id);
+                      await supabase
+                          .from('profiles')
+                          .update({ onesignal_id: event.current.id })
+                          .eq('id', user.id);
+                  }
+              });
+          }
+
+          // 5. Prompt for push
+          if (OneSignal.Slidedown) {
+              OneSignal.Slidedown.promptPush();
+          }
+
+        } catch (error) {
+          console.error("❌ OneSignal Setup Error:", error);
         }
+      };
 
-        OneSignal.Slidedown.promptPush();
-      });
-
-      // Listen for future changes
-      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
-        if (event.current.id) {
-            console.log("New OneSignal ID detected:", event.current.id);
-            await supabase
-                .from('profiles')
-                .update({ onesignal_id: event.current.id })
-                .eq('id', user.id);
-        }
-      });
+      setupOneSignal();
     }
   }, [user]);
 
   // 🟢 4. LOADING STATE -> SHOW SPLASH SCREEN
-  // If Auth is loading OR the 2.5s timer hasn't finished, show Splash
   if (loading || !splashDone) {
     return <Splash />;
   }
